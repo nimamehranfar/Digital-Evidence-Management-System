@@ -5,20 +5,28 @@ import { useCase } from "../context/CaseContext";
 import {
     ArrowLeft, Edit, Trash2, FileText, MessageSquare,
     Activity, Clock, CheckCircle, Calendar, Tag,
-    User, Building, AlertTriangle, Plus, X
+    User, Building, AlertTriangle, Plus, X, Search, Filter
 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function CaseDetailPage() {
     const { caseId } = useParams();
     const navigate = useNavigate();
-    const { user, canEditCase, canDeleteEvidence, isInvestigator } = useAuth();
+    const {
+        user,
+        canEditCase,
+        canDeleteEvidence,
+        canDeleteNote,
+        canAddNote,
+        isProsecutor
+    } = useAuth();
     const {
         getCaseById,
         getEvidenceByCase,
         updateCase,
         deleteCase,
         addCaseNote,
+        deleteCaseNote,
         deleteEvidence
     } = useCase();
 
@@ -27,8 +35,26 @@ export default function CaseDetailPage() {
     const [noteText, setNoteText] = useState("");
     const [editedCase, setEditedCase] = useState(null);
 
+    // Evidence search state
+    const [evidenceSearchQuery, setEvidenceSearchQuery] = useState("");
+    const [evidenceTypeFilter, setEvidenceTypeFilter] = useState("");
+    const [evidenceStatusFilter, setEvidenceStatusFilter] = useState("");
+
     const caseItem = getCaseById(caseId);
-    const evidence = getEvidenceByCase(caseId);
+    const allEvidence = getEvidenceByCase(caseId);
+
+    // Filter evidence based on search
+    const evidence = allEvidence.filter(e => {
+        const matchesSearch = !evidenceSearchQuery ||
+            e.fileName.toLowerCase().includes(evidenceSearchQuery.toLowerCase()) ||
+            (e.description && e.description.toLowerCase().includes(evidenceSearchQuery.toLowerCase())) ||
+            (e.tags && e.tags.some(tag => tag.toLowerCase().includes(evidenceSearchQuery.toLowerCase())));
+
+        const matchesType = !evidenceTypeFilter || e.fileType === evidenceTypeFilter;
+        const matchesStatus = !evidenceStatusFilter || e.status === evidenceStatusFilter;
+
+        return matchesSearch && matchesType && matchesStatus;
+    });
 
     if (!caseItem) {
         return (
@@ -46,29 +72,61 @@ export default function CaseDetailPage() {
     }
 
     const canEdit = canEditCase(caseItem);
+    const canAddNoteToCase = canAddNote(caseItem);
 
-    const handleAddNote = (e) => {
+    const handleAddNote = async (e) => {
         e.preventDefault();
         if (noteText.trim()) {
-            addCaseNote(caseId, noteText);
-            setNoteText("");
+            try {
+                await addCaseNote(caseId, noteText);
+                setNoteText("");
+            } catch (error) {
+                console.error("Failed to add note:", error);
+                alert("Failed to add note. Please try again.");
+            }
         }
     };
 
-    const handleUpdateCase = (e) => {
+    const handleDeleteNote = async (noteId) => {
+        if (window.confirm("Are you sure you want to delete this note?")) {
+            try {
+                await deleteCaseNote(caseId, noteId);
+            } catch (error) {
+                console.error("Failed to delete note:", error);
+                alert("Failed to delete note. Please try again.");
+            }
+        }
+    };
+
+    const handleUpdateCase = async (e) => {
         e.preventDefault();
-        updateCase(caseId, editedCase);
-        setShowEditModal(false);
+        try {
+            await updateCase(caseId, editedCase);
+            setShowEditModal(false);
+        } catch (error) {
+            console.error("Failed to update case:", error);
+            alert("Failed to update case. Please try again.");
+        }
     };
 
-    const handleDeleteCase = () => {
-        deleteCase(caseId);
-        navigate("/cases");
+    const handleDeleteCase = async () => {
+        try {
+            await deleteCase(caseId);
+            navigate("/cases");
+        } catch (error) {
+            console.error("Failed to delete case:", error);
+            alert("Failed to delete case. Please try again.");
+        }
     };
 
-    const handleDeleteEvidence = (evidenceId) => {
-        if (window.confirm("Are you sure you want to delete this evidence?")) {
-            deleteEvidence(evidenceId);
+    const handleDeleteEvidence = async (evidenceId) => {
+        if (window.confirm("Are you sure you want to delete this evidence? This action cannot be undone.")) {
+            try {
+                await deleteEvidence(evidenceId);
+            } catch (error) {
+                console.error("Failed to delete evidence:", error);
+                alert("Failed to delete evidence. Please try again.");
+            }
         }
     };
 
@@ -82,6 +140,14 @@ export default function CaseDetailPage() {
         });
         setShowEditModal(true);
     };
+
+    const clearEvidenceFilters = () => {
+        setEvidenceSearchQuery("");
+        setEvidenceTypeFilter("");
+        setEvidenceStatusFilter("");
+    };
+
+    const hasEvidenceFilters = evidenceSearchQuery || evidenceTypeFilter || evidenceStatusFilter;
 
     const statusIcon = {
         active: <Activity size={20} />,
@@ -130,13 +196,18 @@ export default function CaseDetailPage() {
                         <div className="card-header">
                             <h2>Case Information</h2>
                             <div className="case-badges">
-                <span className={`badge badge-${caseItem.status}`}>
-                  {statusIcon[caseItem.status]}
-                    <span>{caseItem.status}</span>
-                </span>
+                                <span className={`badge badge-${caseItem.status}`}>
+                                    {statusIcon[caseItem.status]}
+                                    <span>{caseItem.status}</span>
+                                </span>
                                 <span className={`badge badge-${caseItem.priority}`}>
-                  {caseItem.priority} priority
-                </span>
+                                    {caseItem.priority} priority
+                                </span>
+                                {isProsecutor && (
+                                    <span className="badge badge-blue">
+                                        Read-Only Access
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <div className="card-content">
@@ -184,7 +255,7 @@ export default function CaseDetailPage() {
                                     <div className="info-content">
                                         <div className="info-label">Assigned Officers</div>
                                         <div className="info-value">
-                                            {caseItem.assignedTo.length} officer(s)
+                                            {caseItem.assignedTo?.length || 0} officer(s)
                                         </div>
                                     </div>
                                 </div>
@@ -201,8 +272,8 @@ export default function CaseDetailPage() {
                                     <div className="tags-list">
                                         {caseItem.tags.map((tag, index) => (
                                             <span key={index} className="tag">
-                        {tag}
-                      </span>
+                                                {tag}
+                                            </span>
                                         ))}
                                     </div>
                                 </div>
@@ -210,10 +281,10 @@ export default function CaseDetailPage() {
                         </div>
                     </div>
 
-                    {/* Evidence */}
+                    {/* Evidence Section with Search */}
                     <div className="card">
                         <div className="card-header">
-                            <h2>Evidence ({evidence.length})</h2>
+                            <h2>Evidence ({allEvidence.length})</h2>
                             <Link
                                 to={`/upload?caseId=${caseId}`}
                                 className="btn btn-primary btn-sm"
@@ -222,8 +293,66 @@ export default function CaseDetailPage() {
                                 <span>Add Evidence</span>
                             </Link>
                         </div>
+
+                        {/* Evidence Search Filters */}
+                        {allEvidence.length > 0 && (
+                            <div className="card-content" style={{ paddingBottom: 0 }}>
+                                <div className="filters-container">
+                                    <div className="search-box">
+                                        <Search size={18} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search evidence..."
+                                            value={evidenceSearchQuery}
+                                            onChange={(e) => setEvidenceSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="filters-group">
+                                        <div className="filter-item">
+                                            <Filter size={16} />
+                                            <select
+                                                value={evidenceTypeFilter}
+                                                onChange={(e) => setEvidenceTypeFilter(e.target.value)}
+                                            >
+                                                <option value="">All Types</option>
+                                                <option value="pdf">PDF</option>
+                                                <option value="image">Image</option>
+                                                <option value="video">Video</option>
+                                                <option value="audio">Audio</option>
+                                                <option value="text">Text</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="filter-item">
+                                            <select
+                                                value={evidenceStatusFilter}
+                                                onChange={(e) => setEvidenceStatusFilter(e.target.value)}
+                                            >
+                                                <option value="">All Status</option>
+                                                <option value="COMPLETED">Completed</option>
+                                                <option value="PROCESSING">Processing</option>
+                                                <option value="RECEIVED">Received</option>
+                                                <option value="FAILED">Failed</option>
+                                            </select>
+                                        </div>
+
+                                        {hasEvidenceFilters && (
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={clearEvidenceFilters}
+                                            >
+                                                <X size={14} />
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="card-content">
-                            {evidence.length === 0 ? (
+                            {allEvidence.length === 0 ? (
                                 <div className="empty-state">
                                     <FileText size={48} />
                                     <p>No evidence uploaded yet</p>
@@ -233,6 +362,17 @@ export default function CaseDetailPage() {
                                     >
                                         Upload Evidence
                                     </Link>
+                                </div>
+                            ) : evidence.length === 0 ? (
+                                <div className="empty-state">
+                                    <Search size={48} />
+                                    <p>No evidence matches your search</p>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={clearEvidenceFilters}
+                                    >
+                                        Clear Filters
+                                    </button>
                                 </div>
                             ) : (
                                 <div className="evidence-grid">
@@ -244,20 +384,28 @@ export default function CaseDetailPage() {
                                             <div className="evidence-info">
                                                 <div className="evidence-name">{item.fileName}</div>
                                                 <div className="evidence-meta">
-                                                    {format(new Date(item.uploadedAt), "MMM d, HH:mm")}
+                                                    {format(new Date(item.uploadedAt), "MMM d, HH:mm")} •{" "}
+                                                    <span className={`badge badge-${item.status.toLowerCase()}`}>
+                                                        {item.status}
+                                                    </span>
                                                 </div>
                                                 {item.description && (
                                                     <div className="evidence-description">
                                                         {item.description}
                                                     </div>
                                                 )}
-                                                <div className="evidence-tags">
-                                                    {item.tags.map((tag, idx) => (
-                                                        <span key={idx} className="tag-sm">
-                              {tag}
-                            </span>
-                                                    ))}
-                                                </div>
+                                                {item.tags && item.tags.length > 0 && (
+                                                    <div className="evidence-tags">
+                                                        {item.tags.slice(0, 3).map((tag, idx) => (
+                                                            <span key={idx} className="tag-sm">
+                                                                {tag}
+                                                            </span>
+                                                        ))}
+                                                        {item.tags.length > 3 && (
+                                                            <span className="tag-sm">+{item.tags.length - 3}</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                             {canDeleteEvidence() && (
                                                 <button
@@ -276,9 +424,8 @@ export default function CaseDetailPage() {
                     </div>
                 </div>
 
-                {/* Sidebar */}
+                {/* Sidebar - Notes */}
                 <div className="case-detail-sidebar">
-                    {/* Notes */}
                     <div className="card">
                         <div className="card-header">
                             <h2>
@@ -287,33 +434,47 @@ export default function CaseDetailPage() {
                             </h2>
                         </div>
                         <div className="card-content">
-                            <form onSubmit={handleAddNote} className="note-form">
-                <textarea
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Add a note..."
-                    rows={3}
-                />
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary btn-sm btn-block"
-                                    disabled={!noteText.trim()}
-                                >
-                                    Add Note
-                                </button>
-                            </form>
+                            {canAddNoteToCase && (
+                                <form onSubmit={handleAddNote} className="note-form">
+                                    <textarea
+                                        value={noteText}
+                                        onChange={(e) => setNoteText(e.target.value)}
+                                        placeholder="Add a note..."
+                                        rows={3}
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary btn-sm btn-block"
+                                        disabled={!noteText.trim()}
+                                    >
+                                        Add Note
+                                    </button>
+                                </form>
+                            )}
 
                             <div className="notes-list">
                                 {caseItem.notes && caseItem.notes.length > 0 ? (
                                     caseItem.notes.map(note => (
                                         <div key={note.id} className="note-item">
                                             <div className="note-header">
-                        <span className="note-author">
-                          {note.createdBy === user.id ? "You" : "User"}
-                        </span>
-                                                <span className="note-date">
-                          {format(new Date(note.createdAt), "MMM d, HH:mm")}
-                        </span>
+                                                <span className="note-author">
+                                                    {note.createdBy === user.id ? "You" : "User"}
+                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span className="note-date">
+                                                        {format(new Date(note.createdAt), "MMM d, HH:mm")}
+                                                    </span>
+                                                    {canDeleteNote(note, caseItem) && (
+                                                        <button
+                                                            className="btn btn-icon"
+                                                            onClick={() => handleDeleteNote(note.id)}
+                                                            title="Delete note"
+                                                            style={{ padding: '0.25rem' }}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="note-text">{note.text}</div>
                                         </div>

@@ -17,8 +17,14 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            await login(username, password);
-            navigate("/dashboard");
+            const user = await login(username, password);
+
+            // Redirect based on role
+            if (user.role === "admin") {
+                navigate("/users");
+            } else {
+                navigate("/dashboard");
+            }
         } catch (err) {
             setError(err.message || "Login failed");
         } finally {
@@ -80,14 +86,33 @@ export default function LoginPage() {
                 <div className="login-footer">
                     <div className="demo-credentials">
                         <h3>Demo Credentials:</h3>
+
                         <div className="credential-item">
-                            <strong>Investigator:</strong> admin / admin123
+                            <strong>Admin (System Management):</strong> admin / admin123
                         </div>
-                        <div className="credential-item">
-                            <strong>Officer:</strong> officer / officer123
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
+                            Manages users, roles, departments. NO investigative access.
                         </div>
+
                         <div className="credential-item">
-                            <strong>Higher Rank:</strong> chief / chief123
+                            <strong>Detective (Full Access):</strong> detective / detective123
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
+                            Cross-department investigative access. Can create/edit/delete cases.
+                        </div>
+
+                        <div className="credential-item">
+                            <strong>Case Officer (Department-Limited):</strong> officer_hq / officer123
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
+                            Can investigate cases only within their department.
+                        </div>
+
+                        <div className="credential-item">
+                            <strong>Prosecutor (Read-Only):</strong> prosecutor / prosecutor123
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
+                            View-only access to all cases and evidence. Legal review.
                         </div>
                     </div>
                 </div>

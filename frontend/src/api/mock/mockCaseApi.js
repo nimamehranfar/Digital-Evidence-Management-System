@@ -8,7 +8,7 @@ const INITIAL_CASES = [
         id: "case1",
         caseNumber: "2026-001-HQ",
         title: "Financial Fraud Investigation",
-        description: "Investigation into corporate financial irregularities and potential embezzlement schemes.",
+        description: "Investigation into corporate financial irregularities and potential embezzlement schemes. Multiple departments involved in comprehensive audit of transactions from Q3-Q4 2025.",
         status: "active",
         priority: "high",
         department: "headquarters",
@@ -16,21 +16,27 @@ const INITIAL_CASES = [
         assignedTo: ["u2", "u6"],
         createdAt: "2026-01-10T08:00:00Z",
         updatedAt: "2026-01-15T14:30:00Z",
-        tags: ["fraud", "financial", "corporate"],
+        tags: ["fraud", "financial", "corporate", "embezzlement"],
         notes: [
             {
                 id: "note1",
-                text: "Initial evidence gathered from accounting department. Need to review Q4 2025 statements.",
+                text: "Initial evidence gathered from accounting department. Need to review Q4 2025 statements in detail. Several irregular wire transfers identified.",
                 createdBy: "u2",
                 createdAt: "2026-01-10T10:00:00Z"
+            },
+            {
+                id: "note2",
+                text: "Forensic accountant assigned to case. Expect preliminary report by end of week.",
+                createdBy: "u6",
+                createdAt: "2026-01-12T15:30:00Z"
             }
         ]
     },
     {
         id: "case2",
         caseNumber: "2026-002-DA",
-        title: "Theft at Local Store",
-        description: "CCTV evidence of theft incident at convenience store on Main Street.",
+        title: "Retail Theft Investigation",
+        description: "Series of thefts at convenience store on Main Street. CCTV footage shows suspect entering premises on multiple occasions. Store owner reports missing inventory totaling approximately $2,500.",
         status: "active",
         priority: "medium",
         department: "district_a",
@@ -38,14 +44,21 @@ const INITIAL_CASES = [
         assignedTo: ["u4"],
         createdAt: "2026-01-12T10:15:00Z",
         updatedAt: "2026-01-14T16:20:00Z",
-        tags: ["theft", "cctv", "retail"],
-        notes: []
+        tags: ["theft", "cctv", "retail", "property-crime"],
+        notes: [
+            {
+                id: "note3",
+                text: "Store manager provided surveillance footage. Suspect appears to be male, approximately 5'10\", wearing dark hoodie.",
+                createdBy: "u4",
+                createdAt: "2026-01-12T11:00:00Z"
+            }
+        ]
     },
     {
         id: "case3",
         caseNumber: "2026-003-HQ",
-        title: "Cybercrime Analysis",
-        description: "Digital forensics investigation into unauthorized network access and data breach.",
+        title: "Cybercrime Data Breach Analysis",
+        description: "Digital forensics investigation into unauthorized network access and potential data breach at municipal systems. Evidence suggests sophisticated attack vector. IT security team cooperating with investigation.",
         status: "pending",
         priority: "high",
         department: "headquarters",
@@ -53,14 +66,14 @@ const INITIAL_CASES = [
         assignedTo: ["u2", "u6"],
         createdAt: "2026-01-13T09:00:00Z",
         updatedAt: "2026-01-13T09:00:00Z",
-        tags: ["cybercrime", "digital", "forensics", "data-breach"],
+        tags: ["cybercrime", "digital", "forensics", "data-breach", "hacking"],
         notes: []
     },
     {
         id: "case4",
         caseNumber: "2026-004-FOR",
-        title: "Digital Evidence Recovery",
-        description: "Recovery and analysis of digital evidence from seized devices.",
+        title: "Digital Evidence Recovery - Mobile Devices",
+        description: "Recovery and analysis of digital evidence from seized mobile devices. Multiple devices collected during warrant execution. Comprehensive forensic imaging and analysis required.",
         status: "active",
         priority: "medium",
         department: "forensics",
@@ -68,8 +81,15 @@ const INITIAL_CASES = [
         assignedTo: ["u6"],
         createdAt: "2026-01-11T14:00:00Z",
         updatedAt: "2026-01-13T11:30:00Z",
-        tags: ["digital", "forensics", "recovery"],
-        notes: []
+        tags: ["digital", "forensics", "recovery", "mobile", "devices"],
+        notes: [
+            {
+                id: "note4",
+                text: "Three smartphones and one tablet received from evidence locker. All devices properly sealed and documented.",
+                createdBy: "u6",
+                createdAt: "2026-01-11T14:15:00Z"
+            }
+        ]
     }
 ];
 
@@ -82,7 +102,12 @@ function initStorage() {
 
 function getCasesFromStorage() {
     initStorage();
-    return JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    const stored = sessionStorage.getItem(STORAGE_KEY);
+    try {
+        return JSON.parse(stored) || [];
+    } catch {
+        return [];
+    }
 }
 
 function saveCasesToStorage(cases) {
@@ -112,9 +137,13 @@ export async function createCase(caseData) {
     const cases = getCasesFromStorage();
     const currentUser = JSON.parse(sessionStorage.getItem("mock_auth_session"));
 
+    // Generate department-specific case number
+    const deptPrefix = caseData.department.toUpperCase().slice(0, 3);
+    const caseCount = cases.filter(c => c.department === caseData.department).length + 1;
+
     const newCase = {
         id: `case${Date.now()}`,
-        caseNumber: `2026-${String(cases.length + 1).padStart(3, '0')}-${caseData.department.toUpperCase().slice(0, 3)}`,
+        caseNumber: `2026-${String(cases.length + 1).padStart(3, '0')}-${deptPrefix}`,
         status: "active",
         createdBy: currentUser?.id || "unknown",
         assignedTo: [currentUser?.id || "unknown"],
@@ -138,6 +167,11 @@ export async function updateCase(caseId, updates) {
 
     if (caseIndex === -1) {
         throw new Error("Case not found");
+    }
+
+    // Handle tags update - convert comma-separated string to array if needed
+    if (updates.tags && typeof updates.tags === 'string') {
+        updates.tags = updates.tags.split(',').map(t => t.trim()).filter(Boolean);
     }
 
     cases[caseIndex] = {
@@ -200,7 +234,13 @@ export async function deleteCaseNote(caseId, noteId) {
         throw new Error("Case not found");
     }
 
-    cases[caseIndex].notes = cases[caseIndex].notes.filter(n => n.id !== noteId);
+    const originalNoteCount = cases[caseIndex].notes?.length || 0;
+    cases[caseIndex].notes = (cases[caseIndex].notes || []).filter(n => n.id !== noteId);
+
+    if (cases[caseIndex].notes.length === originalNoteCount) {
+        throw new Error("Note not found");
+    }
+
     cases[caseIndex].updatedAt = new Date().toISOString();
 
     saveCasesToStorage(cases);

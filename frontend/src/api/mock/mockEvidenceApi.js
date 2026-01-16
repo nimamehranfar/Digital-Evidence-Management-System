@@ -2,11 +2,17 @@ import { mockDelay } from "../config";
 
 const STORAGE_KEY = "mock_evidence";
 
-// Simulate Azure Cognitive Services processing
+// ============================================
+// AZURE COGNITIVE SERVICES SIMULATION
+// ============================================
+// Simulates Azure Computer Vision, OCR, Speech-to-Text, Video Indexer
+// In production, these would be real API calls to Azure services
+
 function simulateAzureCognitiveServices(fileName, fileType) {
     const metadata = {
         processedAt: new Date().toISOString(),
-        processingTime: Math.floor(Math.random() * 3000) + 500
+        processingTime: Math.floor(Math.random() * 3000) + 500,
+        azureServiceVersion: "2024.01"
     };
 
     let autoTags = [];
@@ -14,61 +20,128 @@ function simulateAzureCognitiveServices(fileName, fileType) {
 
     switch (fileType) {
         case "pdf":
-            // Simulate OCR extraction
+            // Simulate Azure Form Recognizer + OCR
             metadata.pages = Math.floor(Math.random() * 10) + 1;
-            metadata.ocrConfidence = 0.85 + Math.random() * 0.15;
-            autoTags = ["document", "scanned", "text"];
-            extractedText = `[OCR Extracted] Sample text from ${fileName}. This document contains ${metadata.pages} pages of relevant information.`;
+            metadata.ocrConfidence = (0.85 + Math.random() * 0.15).toFixed(3);
+            metadata.language = "en";
+            metadata.orientation = "portrait";
+            metadata.textBlocks = Math.floor(Math.random() * 50) + 10;
+
+            autoTags = ["document", "scanned", "text", "pdf"];
+            extractedText = `[OCR Extracted] Document analysis complete. ${metadata.pages} page(s) processed. Text extraction confidence: ${metadata.ocrConfidence}. Content includes legal terminology, dates, and structured data. Key sections identified: header, body, signature block.`;
             break;
 
         case "image":
-            // Simulate Computer Vision analysis
-            const objects = ["person", "vehicle", "building", "street", "object"];
-            const detectedObjects = objects.slice(0, Math.floor(Math.random() * 3) + 1);
-            metadata.width = 1920;
-            metadata.height = 1080;
-            metadata.detectedObjects = detectedObjects;
-            metadata.faces = Math.floor(Math.random() * 3);
-            metadata.landmarks = [];
-            autoTags = ["photo", "visual", ...detectedObjects];
-            extractedText = `Image analysis detected: ${detectedObjects.join(", ")}. ${metadata.faces} face(s) detected.`;
+            // Simulate Azure Computer Vision API
+            const objects = ["person", "vehicle", "building", "street", "object", "face", "hand", "logo"];
+            const detectedObjects = objects
+                .sort(() => 0.5 - Math.random())
+                .slice(0, Math.floor(Math.random() * 4) + 1);
+
+            metadata.width = 1920 + Math.floor(Math.random() * 1000);
+            metadata.height = 1080 + Math.floor(Math.random() * 1000);
+            metadata.format = "jpg";
+            metadata.colorSpace = "RGB";
+            metadata.detectedObjects = detectedObjects.map(obj => ({
+                name: obj,
+                confidence: (0.75 + Math.random() * 0.25).toFixed(3),
+                boundingBox: {
+                    x: Math.floor(Math.random() * 500),
+                    y: Math.floor(Math.random() * 500),
+                    width: Math.floor(Math.random() * 200) + 50,
+                    height: Math.floor(Math.random() * 200) + 50
+                }
+            }));
+            metadata.faces = Math.floor(Math.random() * 4);
+            metadata.landmarks = ["building", "street_sign"].filter(() => Math.random() > 0.5);
+            metadata.dominantColors = ["#1a1a1a", "#4a4a4a", "#ffffff"].slice(0, 2);
+            metadata.isAdultContent = false;
+            metadata.adultScore = (Math.random() * 0.1).toFixed(3);
+
+            autoTags = ["photo", "visual", "image", ...detectedObjects];
+            extractedText = `[Computer Vision Analysis] Image dimensions: ${metadata.width}x${metadata.height}. Detected objects: ${detectedObjects.join(", ")}. Face count: ${metadata.faces}. Scene type: outdoor/indoor classification applied. Color analysis: ${metadata.dominantColors.join(", ")}. Quality assessment: sharp, well-lit.`;
             break;
 
         case "audio":
-            // Simulate Speech-to-Text
+            // Simulate Azure Speech-to-Text + Speaker Recognition
             metadata.duration = Math.floor(Math.random() * 600) + 60;
             metadata.sampleRate = 44100;
             metadata.format = "wav";
+            metadata.channels = Math.random() > 0.5 ? 2 : 1;
+            metadata.bitrate = 320;
             metadata.speakers = Math.floor(Math.random() * 3) + 1;
             metadata.language = "en-US";
-            metadata.confidence = 0.82 + Math.random() * 0.15;
-            autoTags = ["audio", "recording", "speech"];
-            extractedText = `[Transcript] Audio recording, duration: ${Math.floor(metadata.duration / 60)}:${String(metadata.duration % 60).padStart(2, '0')}. ${metadata.speakers} speaker(s) detected. Sample transcript content...`;
+            metadata.languageConfidence = (0.82 + Math.random() * 0.15).toFixed(3);
+            metadata.transcriptionConfidence = (0.85 + Math.random() * 0.12).toFixed(3);
+            metadata.speakerDiarization = Array.from({ length: metadata.speakers }, (_, i) => ({
+                speakerId: `Speaker_${i + 1}`,
+                segments: Math.floor(Math.random() * 10) + 5
+            }));
+            metadata.keyPhrases = ["investigation", "timeline", "evidence", "witness", "location"];
+
+            autoTags = ["audio", "recording", "speech", "interview"];
+            extractedText = `[Speech-to-Text Transcript] Duration: ${Math.floor(metadata.duration / 60)}:${String(metadata.duration % 60).padStart(2, '0')}. ${metadata.speakers} speaker(s) identified. Language: ${metadata.language} (confidence: ${metadata.languageConfidence}). Transcript summary: Interview recording with clear audio quality. Key topics discussed: ${metadata.keyPhrases.join(", ")}. Emotional tone: neutral to professional. Transcription quality: high confidence across all segments.`;
             break;
 
         case "video":
-            // Simulate Video Indexer
+            // Simulate Azure Video Indexer
             metadata.duration = Math.floor(Math.random() * 1200) + 120;
-            metadata.resolution = "1920x1080";
-            metadata.fps = 30;
-            metadata.scenes = Math.floor(Math.random() * 10) + 1;
+            metadata.resolution = ["1920x1080", "1280x720", "3840x2160"][Math.floor(Math.random() * 3)];
+            metadata.fps = [30, 60][Math.floor(Math.random() * 2)];
+            metadata.codec = "H.264";
+            metadata.format = "mp4";
+            metadata.scenes = Math.floor(Math.random() * 15) + 3;
             metadata.keyframes = Math.floor(metadata.duration / 10);
-            autoTags = ["video", "footage", "surveillance"];
-            extractedText = `Video analysis: ${metadata.scenes} scene(s) detected. Duration: ${Math.floor(metadata.duration / 60)} minutes.`;
+            metadata.detectedPeople = Math.floor(Math.random() * 5) + 1;
+            metadata.faceTracking = metadata.detectedPeople > 0;
+            metadata.objectTracking = ["vehicle", "phone", "document"].filter(() => Math.random() > 0.6);
+            metadata.audioTracks = 1;
+            metadata.hasSubtitles = false;
+            metadata.sceneBreaks = Array.from({ length: metadata.scenes }, (_, i) => ({
+                sceneId: i + 1,
+                startTime: Math.floor((metadata.duration / metadata.scenes) * i),
+                duration: Math.floor(metadata.duration / metadata.scenes),
+                shotType: ["wide", "medium", "close-up"][Math.floor(Math.random() * 3)]
+            }));
+
+            autoTags = ["video", "footage", "surveillance", "recording"];
+            extractedText = `[Video Analysis] Resolution: ${metadata.resolution} @ ${metadata.fps}fps. Duration: ${Math.floor(metadata.duration / 60)} minutes. ${metadata.scenes} scene(s) detected with ${metadata.keyframes} keyframes extracted. Face tracking: ${metadata.faceTracking ? 'enabled' : 'disabled'}. ${metadata.detectedPeople} person(s) tracked across frames. Object tracking identified: ${metadata.objectTracking.join(", ") || "none"}. Scene composition analysis complete with shot-type classification.`;
             break;
 
         case "text":
-            // Simulate Text Analytics
+            // Simulate Azure Text Analytics + Key Phrase Extraction
             metadata.lines = Math.floor(Math.random() * 500) + 50;
+            metadata.words = metadata.lines * (Math.floor(Math.random() * 10) + 5);
+            metadata.characters = metadata.words * 6;
             metadata.encoding = "utf-8";
-            metadata.sentiment = ["positive", "neutral", "negative"][Math.floor(Math.random() * 3)];
-            metadata.keyPhrases = ["investigation", "evidence", "suspect", "timeline"];
-            autoTags = ["text", "document", "log"];
-            extractedText = `Text file contains ${metadata.lines} lines. Key phrases identified: ${metadata.keyPhrases.join(", ")}`;
+            metadata.language = "en";
+            metadata.languageConfidence = (0.92 + Math.random() * 0.08).toFixed(3);
+            metadata.sentiment = {
+                overall: ["positive", "neutral", "negative"][Math.floor(Math.random() * 3)],
+                positiveScore: (Math.random() * 0.5).toFixed(3),
+                neutralScore: (0.3 + Math.random() * 0.4).toFixed(3),
+                negativeScore: (Math.random() * 0.3).toFixed(3)
+            };
+            metadata.keyPhrases = [
+                "investigation timeline",
+                "evidence collection",
+                "witness statement",
+                "forensic analysis",
+                "case documentation"
+            ].slice(0, Math.floor(Math.random() * 3) + 2);
+            metadata.entities = [
+                { type: "Person", name: "John Doe", confidence: 0.95 },
+                { type: "Location", name: "123 Main Street", confidence: 0.88 },
+                { type: "DateTime", name: "January 15, 2026", confidence: 0.92 }
+            ];
+
+            autoTags = ["text", "document", "log", "report"];
+            extractedText = `[Text Analytics] Document contains ${metadata.lines} lines (${metadata.words} words, ${metadata.characters} characters). Language: ${metadata.language} (confidence: ${metadata.languageConfidence}). Sentiment: ${metadata.sentiment.overall} (positive: ${metadata.sentiment.positiveScore}, neutral: ${metadata.sentiment.neutralScore}, negative: ${metadata.sentiment.negativeScore}). Key phrases: ${metadata.keyPhrases.join(", ")}. Entities detected: ${metadata.entities.map(e => `${e.type}(${e.name})`).join(", ")}.`;
             break;
 
         default:
             autoTags = ["file", "unknown"];
+            extractedText = "File format not supported for content analysis.";
     }
 
     return {
@@ -78,7 +151,10 @@ function simulateAzureCognitiveServices(fileName, fileType) {
     };
 }
 
-// Initial mock evidence
+// ============================================
+// INITIAL MOCK EVIDENCE
+// ============================================
+
 const INITIAL_EVIDENCE = [
     {
         id: "e1",
@@ -89,16 +165,20 @@ const INITIAL_EVIDENCE = [
         uploadedAt: "2026-01-10T12:20:00Z",
         uploadedBy: "u2",
         tags: ["invoice", "legal", "financial", "document", "scanned", "text"],
-        autoTags: ["document", "scanned", "text"],
+        autoTags: ["document", "scanned", "text", "pdf"],
         userTags: ["invoice", "legal", "financial"],
         status: "COMPLETED",
         description: "Annual financial invoice showing discrepancies",
-        extractedText: "[OCR Extracted] Invoice #2025-1234 for financial services rendered. Total amount: $125,000. Discrepancies noted in line items 45-67.",
+        extractedText: "[OCR Extracted] Document analysis complete. 3 page(s) processed. Text extraction confidence: 0.942. Content includes legal terminology, dates, and structured data. Key sections identified: header, body, signature block.",
         metadata: {
             pages: 3,
-            ocrConfidence: 0.94,
+            ocrConfidence: "0.942",
+            language: "en",
+            orientation: "portrait",
+            textBlocks: 47,
             processedAt: "2026-01-10T12:21:30Z",
-            processingTime: 1500
+            processingTime: 1500,
+            azureServiceVersion: "2024.01"
         }
     },
     {
@@ -108,49 +188,37 @@ const INITIAL_EVIDENCE = [
         fileType: "image",
         fileSize: 1850000,
         uploadedAt: "2026-01-12T14:10:00Z",
-        uploadedBy: "u3",
+        uploadedBy: "u4",
         tags: ["surveillance", "suspect", "photo", "visual", "person", "vehicle"],
-        autoTags: ["photo", "visual", "person", "vehicle"],
+        autoTags: ["photo", "visual", "image", "person", "vehicle"],
         userTags: ["surveillance", "suspect"],
         status: "COMPLETED",
         description: "Surveillance footage snapshot showing suspect at entrance",
-        extractedText: "Image analysis detected: person, vehicle. 2 face(s) detected.",
+        extractedText: "[Computer Vision Analysis] Image dimensions: 1920x1080. Detected objects: person, vehicle. Face count: 2. Scene type: outdoor/indoor classification applied. Color analysis: #1a1a1a, #4a4a4a. Quality assessment: sharp, well-lit.",
         metadata: {
             width: 1920,
             height: 1080,
-            detectedObjects: ["person", "vehicle"],
+            format: "jpg",
+            colorSpace: "RGB",
+            detectedObjects: [
+                { name: "person", confidence: "0.942", boundingBox: { x: 340, y: 120, width: 180, height: 240 } },
+                { name: "vehicle", confidence: "0.887", boundingBox: { x: 850, y: 450, width: 320, height: 180 } }
+            ],
             faces: 2,
-            landmarks: [],
+            landmarks: ["building", "street_sign"],
+            dominantColors: ["#1a1a1a", "#4a4a4a"],
+            isAdultContent: false,
+            adultScore: "0.012",
             processedAt: "2026-01-12T14:11:00Z",
-            processingTime: 850
-        }
-    },
-    {
-        id: "e3",
-        caseId: "case1",
-        fileName: "witness_interview.wav",
-        fileType: "audio",
-        fileSize: 5200000,
-        uploadedAt: "2026-01-11T18:02:00Z",
-        uploadedBy: "u2",
-        tags: ["interview", "witness", "testimony", "audio", "recording", "speech"],
-        autoTags: ["audio", "recording", "speech"],
-        userTags: ["interview", "witness", "testimony"],
-        status: "COMPLETED",
-        description: "Witness interview recording - Accounting Manager",
-        extractedText: "[Transcript] Audio recording, duration: 5:20. 2 speaker(s) detected. Witness statement regarding irregular financial transactions observed in Q4 2025...",
-        metadata: {
-            duration: 320,
-            sampleRate: 44100,
-            format: "wav",
-            speakers: 2,
-            language: "en-US",
-            confidence: 0.89,
-            processedAt: "2026-01-11T18:05:00Z",
-            processingTime: 2800
+            processingTime: 850,
+            azureServiceVersion: "2024.01"
         }
     }
 ];
+
+// ============================================
+// STORAGE FUNCTIONS
+// ============================================
 
 function initStorage() {
     if (!sessionStorage.getItem(STORAGE_KEY)) {
@@ -160,12 +228,21 @@ function initStorage() {
 
 function getEvidenceFromStorage() {
     initStorage();
-    return JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    const stored = sessionStorage.getItem(STORAGE_KEY);
+    try {
+        return JSON.parse(stored) || [];
+    } catch {
+        return [];
+    }
 }
 
 function saveEvidenceToStorage(evidence) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(evidence));
 }
+
+// ============================================
+// API FUNCTIONS
+// ============================================
 
 export async function getEvidence() {
     await mockDelay(450);
@@ -203,20 +280,21 @@ export async function createEvidence(evidenceData) {
         status: "PROCESSING",
         tags: [],
         autoTags: azureResults.autoTags,
-        userTags: evidenceData.tags || [],
+        userTags: evidenceData.userTags || evidenceData.tags || [],
         extractedText: "",
+        description: evidenceData.description || "",
         ...evidenceData,
         metadata: azureResults.metadata
     };
 
     // Combine auto and user tags
-    newEvidence.tags = [...new Set([...azureResults.autoTags, ...(evidenceData.tags || [])])];
+    newEvidence.tags = [...new Set([...azureResults.autoTags, ...newEvidence.userTags])];
 
     evidence.push(newEvidence);
     saveEvidenceToStorage(evidence);
 
-    // Simulate async processing completion
-    setTimeout(async () => {
+    // Simulate async processing completion (Azure Cognitive Services callback)
+    setTimeout(() => {
         const updatedEvidence = getEvidenceFromStorage();
         const index = updatedEvidence.findIndex(e => e.id === newEvidence.id);
         if (index !== -1) {
@@ -239,16 +317,15 @@ export async function updateEvidence(evidenceId, updates) {
         throw new Error("Evidence not found");
     }
 
-    // If tags are being updated, separate auto and user tags
-    if (updates.tags) {
-        const currentEvidence = evidence[evidenceIndex];
-        const newUserTags = updates.tags.filter(tag => !currentEvidence.autoTags.includes(tag));
-        updates.userTags = newUserTags;
-        updates.tags = [...new Set([...currentEvidence.autoTags, ...newUserTags])];
+    const currentEvidence = evidence[evidenceIndex];
+
+    // Handle user tags update (preserve auto tags from Azure)
+    if (updates.userTags) {
+        updates.tags = [...new Set([...currentEvidence.autoTags, ...updates.userTags])];
     }
 
     evidence[evidenceIndex] = {
-        ...evidence[evidenceIndex],
+        ...currentEvidence,
         ...updates
     };
 
@@ -300,9 +377,9 @@ export async function searchEvidence(filters) {
         const q = query.toLowerCase();
         evidence = evidence.filter(e =>
             e.fileName.toLowerCase().includes(q) ||
-            e.description?.toLowerCase().includes(q) ||
-            e.extractedText?.toLowerCase().includes(q) ||
-            e.tags.some(tag => tag.toLowerCase().includes(q))
+            (e.description && e.description.toLowerCase().includes(q)) ||
+            (e.extractedText && e.extractedText.toLowerCase().includes(q)) ||
+            (e.tags && e.tags.some(tag => tag.toLowerCase().includes(q)))
         );
     }
 
@@ -319,7 +396,8 @@ export async function uploadFile(file, caseId, metadata) {
         fileName: file.name,
         fileType,
         fileSize: file.size,
-        ...metadata
+        userTags: metadata.tags || [],
+        description: metadata.description || ""
     });
 }
 

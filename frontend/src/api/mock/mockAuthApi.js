@@ -1,6 +1,10 @@
 import { mockDelay } from "../config";
 
 // Mock user database with new role structure
+// Admin: System management, NO investigative access
+// Detective: Full cross-department investigative access
+// Case Officer: Department-scoped investigative access
+// Prosecutor: Read-only access to all cases/evidence
 const USERS = [
     {
         id: "u1",

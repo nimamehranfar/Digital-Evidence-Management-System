@@ -10,3 +10,4 @@ export const createCase = api.createCase;
 export const updateCase = api.updateCase;
 export const deleteCase = api.deleteCase;
 export const addCaseNote = api.addCaseNote;
+export const deleteCaseNote = api.deleteCaseNote;

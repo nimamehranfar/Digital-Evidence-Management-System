@@ -12,8 +12,8 @@ const INITIAL_CASES = [
         status: "active",
         priority: "high",
         department: "headquarters",
-        createdBy: "u1",
-        assignedTo: ["u1", "u2"],
+        createdBy: "u2",
+        assignedTo: ["u2", "u6"],
         createdAt: "2026-01-10T08:00:00Z",
         updatedAt: "2026-01-15T14:30:00Z",
         tags: ["fraud", "financial", "corporate"],
@@ -21,7 +21,7 @@ const INITIAL_CASES = [
             {
                 id: "note1",
                 text: "Initial evidence gathered from accounting department. Need to review Q4 2025 statements.",
-                createdBy: "u1",
+                createdBy: "u2",
                 createdAt: "2026-01-10T10:00:00Z"
             }
         ]
@@ -34,8 +34,8 @@ const INITIAL_CASES = [
         status: "active",
         priority: "medium",
         department: "district_a",
-        createdBy: "u2",
-        assignedTo: ["u2"],
+        createdBy: "u4",
+        assignedTo: ["u4"],
         createdAt: "2026-01-12T10:15:00Z",
         updatedAt: "2026-01-14T16:20:00Z",
         tags: ["theft", "cctv", "retail"],
@@ -49,8 +49,8 @@ const INITIAL_CASES = [
         status: "pending",
         priority: "high",
         department: "headquarters",
-        createdBy: "u1",
-        assignedTo: ["u1", "u3"],
+        createdBy: "u2",
+        assignedTo: ["u2", "u6"],
         createdAt: "2026-01-13T09:00:00Z",
         updatedAt: "2026-01-13T09:00:00Z",
         tags: ["cybercrime", "digital", "forensics", "data-breach"],
@@ -64,8 +64,8 @@ const INITIAL_CASES = [
         status: "active",
         priority: "medium",
         department: "forensics",
-        createdBy: "u4",
-        assignedTo: ["u4"],
+        createdBy: "u6",
+        assignedTo: ["u6"],
         createdAt: "2026-01-11T14:00:00Z",
         updatedAt: "2026-01-13T11:30:00Z",
         tags: ["digital", "forensics", "recovery"],
@@ -184,6 +184,23 @@ export async function addCaseNote(caseId, noteText) {
     };
 
     cases[caseIndex].notes = [...(cases[caseIndex].notes || []), note];
+    cases[caseIndex].updatedAt = new Date().toISOString();
+
+    saveCasesToStorage(cases);
+    return cases[caseIndex];
+}
+
+export async function deleteCaseNote(caseId, noteId) {
+    await mockDelay(300);
+
+    const cases = getCasesFromStorage();
+    const caseIndex = cases.findIndex(c => c.id === caseId);
+
+    if (caseIndex === -1) {
+        throw new Error("Case not found");
+    }
+
+    cases[caseIndex].notes = cases[caseIndex].notes.filter(n => n.id !== noteId);
     cases[caseIndex].updatedAt = new Date().toISOString();
 
     saveCasesToStorage(cases);

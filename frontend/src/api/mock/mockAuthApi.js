@@ -1,60 +1,82 @@
 import { mockDelay } from "../config";
 
-// Mock user database
+// Mock user database with new role structure
 const USERS = [
     {
         id: "u1",
         username: "admin",
         password: "admin123",
         email: "admin@evidence.sys",
-        fullName: "Admin Investigator",
-        role: "investigator",
-        department: "headquarters",
-        badge: "INV-001",
+        fullName: "System Administrator",
+        role: "admin",
+        department: "administration",
+        badge: "ADM-001",
         avatar: null
     },
     {
         id: "u2",
-        username: "officer",
-        password: "officer123",
-        email: "officer@evidence.sys",
-        fullName: "John Officer",
-        role: "officer",
-        department: "district_a",
-        badge: "OFF-102",
+        username: "detective",
+        password: "detective123",
+        email: "detective@evidence.sys",
+        fullName: "Senior Detective",
+        role: "detective",
+        department: "headquarters",
+        badge: "DET-001",
         avatar: null
     },
     {
         id: "u3",
-        username: "chief",
-        password: "chief123",
-        email: "chief@evidence.sys",
-        fullName: "Chief Commander",
-        role: "higher_rank",
+        username: "officer_hq",
+        password: "officer123",
+        email: "officer.hq@evidence.sys",
+        fullName: "Officer Johnson",
+        role: "case_officer",
         department: "headquarters",
-        badge: "CHF-001",
+        badge: "OFF-HQ-102",
         avatar: null
     },
     {
         id: "u4",
-        username: "detective",
-        password: "detective123",
-        email: "detective@evidence.sys",
-        fullName: "Sarah Detective",
-        role: "investigator",
-        department: "forensics",
-        badge: "INV-045",
+        username: "officer_da",
+        password: "officer123",
+        email: "officer.da@evidence.sys",
+        fullName: "Officer Martinez",
+        role: "case_officer",
+        department: "district_a",
+        badge: "OFF-DA-205",
         avatar: null
     },
     {
         id: "u5",
-        username: "patrol",
-        password: "patrol123",
-        email: "patrol@evidence.sys",
-        fullName: "Mike Patrol",
-        role: "officer",
+        username: "prosecutor",
+        password: "prosecutor123",
+        email: "prosecutor@evidence.sys",
+        fullName: "Prosecutor Williams",
+        role: "prosecutor",
+        department: "legal",
+        badge: "PROS-001",
+        avatar: null
+    },
+    {
+        id: "u6",
+        username: "detective2",
+        password: "detective123",
+        email: "detective2@evidence.sys",
+        fullName: "Task Force Lead",
+        role: "detective",
+        department: "forensics",
+        badge: "DET-FOR-045",
+        avatar: null
+    },
+    {
+        id: "u7",
+        username: "officer_db",
+        password: "officer123",
+        email: "officer.db@evidence.sys",
+        fullName: "Officer Chen",
+        role: "case_officer",
         department: "district_b",
-        badge: "OFF-203",
+        badge: "OFF-DB-312",
         avatar: null
     }
 ];

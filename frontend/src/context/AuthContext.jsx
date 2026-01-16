@@ -53,34 +53,127 @@ export function AuthProvider({ children }) {
         return requiredRoles.includes(user.role);
     };
 
+    // Admin: ZERO access to investigative content
+    const isAdmin = () => user?.role === "admin";
+
+    // Detective: Full cross-department access
+    const isDetective = () => user?.role === "detective";
+
+    // Case Officer: Department-scoped access
+    const isCaseOfficer = () => user?.role === "case_officer";
+
+    // Prosecutor: Read-only access to all
+    const isProsecutor = () => user?.role === "prosecutor";
+
+    // Can access case based on role and department
     const canAccessCase = (caseItem) => {
         if (!user || !caseItem) return false;
 
-        // Investigators can access everything
-        if (user.role === "investigator") return true;
+        // Admin has NO access to cases
+        if (isAdmin()) return false;
 
-        // Higher rank can access everything
-        if (user.role === "higher_rank") return true;
+        // Detective can access everything
+        if (isDetective()) return true;
 
-        // Officers can only access cases from their department
-        if (user.role === "officer") {
+        // Prosecutor can access everything (read-only)
+        if (isProsecutor()) return true;
+
+        // Case Officer can only access cases from their department
+        if (isCaseOfficer()) {
             return caseItem.department === user.department;
         }
 
         return false;
     };
 
+    // Can create/edit cases
     const canEditCase = (caseItem) => {
         if (!user || !caseItem) return false;
-        return user.role === "investigator";
+
+        // Admin cannot edit cases
+        if (isAdmin()) return false;
+
+        // Prosecutor cannot edit (read-only)
+        if (isProsecutor()) return false;
+
+        // Detective can edit all cases
+        if (isDetective()) return true;
+
+        // Case Officer can edit only their department's cases
+        if (isCaseOfficer()) {
+            return caseItem.department === user.department;
+        }
+
+        return false;
     };
 
+    // Can delete cases
+    const canDeleteCase = (caseItem) => {
+        if (!user || !caseItem) return false;
+
+        // Only Detective can delete cases
+        return isDetective();
+    };
+
+    // Can add evidence
     const canAddEvidence = () => {
-        return !!user;
+        if (!user) return false;
+
+        // Admin and Prosecutor cannot add evidence
+        if (isAdmin() || isProsecutor()) return false;
+
+        // Detective and Case Officer can add evidence
+        return isDetective() || isCaseOfficer();
     };
 
+    // Can delete evidence
     const canDeleteEvidence = () => {
-        return user?.role === "investigator";
+        if (!user) return false;
+
+        // Only Detective can delete evidence
+        return isDetective();
+    };
+
+    // Can modify evidence metadata
+    const canEditEvidence = () => {
+        if (!user) return false;
+
+        // Admin and Prosecutor cannot edit evidence
+        if (isAdmin() || isProsecutor()) return false;
+
+        // Detective and Case Officer can edit evidence
+        return isDetective() || isCaseOfficer();
+    };
+
+    // Can delete notes
+    const canDeleteNote = (note) => {
+        if (!user || !note) return false;
+
+        // Detective can delete any note
+        if (isDetective()) return true;
+
+        // Case Officer can delete only their own notes
+        if (isCaseOfficer()) {
+            return note.createdBy === user.id;
+        }
+
+        return false;
+    };
+
+    // Can access analytics
+    const canAccessAnalytics = () => {
+        if (!user) return false;
+
+        // Admin cannot access analytics (no investigative data)
+        if (isAdmin()) return false;
+
+        // Everyone else can access analytics
+        return true;
+    };
+
+    // Can manage users (Admin only)
+    const canManageUsers = () => {
+        return isAdmin();
     };
 
     const value = {
@@ -92,12 +185,18 @@ export function AuthProvider({ children }) {
         hasPermission,
         canAccessCase,
         canEditCase,
+        canDeleteCase,
         canAddEvidence,
         canDeleteEvidence,
+        canEditEvidence,
+        canDeleteNote,
+        canAccessAnalytics,
+        canManageUsers,
         isAuthenticated: !!user,
-        isInvestigator: user?.role === "investigator",
-        isOfficer: user?.role === "officer",
-        isHigherRank: user?.role === "higher_rank"
+        isAdmin: isAdmin(),
+        isDetective: isDetective(),
+        isCaseOfficer: isCaseOfficer(),
+        isProsecutor: isProsecutor()
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

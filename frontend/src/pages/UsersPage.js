@@ -4,15 +4,15 @@ import * as authApi from "../api/authApi";
 import { Users, Shield, User, Mail, Award } from "lucide-react";
 
 export default function UsersPage() {
-    const { isInvestigator } = useAuth();
+    const { isAdmin } = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (isInvestigator) {
+        if (isAdmin) {
             loadUsers();
         }
-    }, [isInvestigator]);
+    }, [isAdmin]);
 
     const loadUsers = async () => {
         try {
@@ -25,7 +25,7 @@ export default function UsersPage() {
         }
     };
 
-    if (!isInvestigator) {
+    if (!isAdmin) {
         return (
             <div className="page-container">
                 <div className="empty-state">
@@ -178,61 +178,6 @@ export default function UsersPage() {
                             ))}
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            </div>
-
-            {/* Role Permissions Info */}
-            <div className="card">
-                <div className="card-header">
-                    <h2>Role Permissions</h2>
-                </div>
-                <div className="card-content">
-                    <div className="permissions-grid">
-                        <div className="permission-card">
-                            <div className="permission-header">
-                                <Shield size={24} className="permission-icon" />
-                                <h3>Investigator</h3>
-                            </div>
-                            <ul className="permission-list">
-                                <li>Full access to all cases and evidence</li>
-                                <li>Create, edit, and delete cases</li>
-                                <li>Upload and delete evidence</li>
-                                <li>Manage user accounts</li>
-                                <li>View analytics and reports</li>
-                                <li>Access all departments</li>
-                            </ul>
-                        </div>
-
-                        <div className="permission-card">
-                            <div className="permission-header">
-                                <Award size={24} className="permission-icon" />
-                                <h3>Higher Rank</h3>
-                            </div>
-                            <ul className="permission-list">
-                                <li>View all cases across departments</li>
-                                <li>Search all evidence</li>
-                                <li>View analytics and reports</li>
-                                <li>Upload evidence to assigned cases</li>
-                                <li>Add notes to cases</li>
-                                <li>Read-only access to most features</li>
-                            </ul>
-                        </div>
-
-                        <div className="permission-card">
-                            <div className="permission-header">
-                                <User size={24} className="permission-icon" />
-                                <h3>Officer</h3>
-                            </div>
-                            <ul className="permission-list">
-                                <li>View cases in own department only</li>
-                                <li>Upload evidence to assigned cases</li>
-                                <li>Search evidence in accessible cases</li>
-                                <li>Add notes to assigned cases</li>
-                                <li>Limited analytics access</li>
-                                <li>Cannot edit or delete cases</li>
-                            </ul>
-                        </div>
                     </div>
                 </div>
             </div>

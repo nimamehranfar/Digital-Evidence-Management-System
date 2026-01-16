@@ -29,17 +29,29 @@ export default function App() {
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="cases" element={<CasesPage />} />
-                <Route path="cases/:caseId" element={<CaseDetailPage />} />
-                <Route path="upload" element={<UploadPage />} />
-                <Route path="search" element={<SearchPage />} />
+                <Route path="cases" element={
+                  <ProtectedRoute requiredRole={["detective", "prosecutor", "case_officer"]}>
+                    <CasesPage />
+                  </ProtectedRoute>} />
+                <Route path="cases/:caseId" element={
+                  <ProtectedRoute requiredRole={["detective", "prosecutor", "case_officer"]}>
+                    <CaseDetailPage />
+                  </ProtectedRoute>} />
+                <Route path="upload" element={
+                  <ProtectedRoute requiredRole={["detective", "case_officer"]}>
+                    <UploadPage />
+                  </ProtectedRoute>} />
+                <Route path="search" element={
+                  <ProtectedRoute requiredRole={["detective", "prosecutor", "case_officer"]}>
+                    <SearchPage />
+                  </ProtectedRoute>} />
                 <Route path="analytics" element={
-                  <ProtectedRoute requiredRole={["investigator", "higher_rank"]}>
+                  <ProtectedRoute requiredRole={["detective", "prosecutor"]}>
                     <AnalyticsPage />
                   </ProtectedRoute>
                 } />
                 <Route path="users" element={
-                  <ProtectedRoute requiredRole={["investigator"]}>
+                  <ProtectedRoute requiredRole={["admin"]}>
                     <UsersPage />
                   </ProtectedRoute>
                 } />

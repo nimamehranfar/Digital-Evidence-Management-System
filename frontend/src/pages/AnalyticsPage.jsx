@@ -11,7 +11,7 @@ export default function AnalyticsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (hasPermission(["investigator", "higher_rank"])) {
+        if (hasPermission(["detective", "prosecutor"])) {
             loadStats();
         }
     }, []);
@@ -27,7 +27,7 @@ export default function AnalyticsPage() {
         }
     };
 
-    if (!hasPermission(["investigator", "higher_rank"])) {
+    if (!hasPermission(["detective", "prosecutor"])) {
         return (
             <div className="page-container">
                 <div className="empty-state">

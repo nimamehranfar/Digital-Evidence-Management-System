@@ -9,7 +9,7 @@ import {
 import { format } from "date-fns";
 
 export default function CasesPage() {
-    const { user, isInvestigator } = useAuth();
+    const { user, isDetective } = useAuth();
     const { getAccessibleCases, createCase } = useCase();
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -75,7 +75,7 @@ export default function CasesPage() {
                     <h1>Cases</h1>
                     <p>Manage and track investigation cases</p>
                 </div>
-                {isInvestigator && (
+                {isDetective && (
                     <button
                         className="btn btn-primary"
                         onClick={() => setShowCreateModal(true)}

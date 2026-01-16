@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCase } from "../context/CaseContext";
 import {
     Search, Filter, FileText, Image, Music,
-    Video, File, X, Calendar, Tag, Briefcase
+    Video, File, X, Calendar, Tag, Briefcase, CheckCircle, Activity, Clock, XCircle
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -17,6 +17,18 @@ export default function SearchPage() {
     const [results, setResults] = useState([]);
     const [hasSearched, setHasSearched] = useState(false);
 
+    // Get evidence for accessible cases
+    const { getAccessibleCases, evidence } = useCase();
+    const cases = getAccessibleCases();
+    const accessibleCaseIds = cases.map(c => c.id);
+    const userEvidence = evidence.filter(e =>
+        accessibleCaseIds.includes(e.caseId)
+    );
+
+    const recentEvidence = [...userEvidence]
+        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))
+        .slice(0, 5);
+
     const handleSearch = (e) => {
         e.preventDefault();
         const searchResults = searchEvidence({
@@ -25,6 +37,7 @@ export default function SearchPage() {
             status,
             caseId: selectedCase
         });
+        console.log(searchResults);
         setResults(searchResults);
         setHasSearched(true);
     };
@@ -133,7 +146,51 @@ export default function SearchPage() {
                     </h2>
                 </div>
                 <div className="card-content">
-                    {hasSearched && results.length === 0 ? (
+                    {!hasSearched? (
+                        recentEvidence.length === 0 ? (
+                            <div className="empty-state">
+                                <FileText size={48} />
+                                <p>No evidence uploaded yet</p>
+                            </div>
+                        ) : (
+                            <div className="list">
+                                {recentEvidence.map(item => {
+                                    const caseItem = cases.find(c => c.id === item.caseId);
+                                    return (
+                                        <div key={item.id} className="list-item">
+                                            <div className={`file-icon file-icon-${item.fileType}`}>
+                                                {item.fileType === "pdf" && "PDF"}
+                                                {item.fileType === "image" && "IMG"}
+                                                {item.fileType === "audio" && "AUD"}
+                                                {item.fileType === "video" && "VID"}
+                                                {item.fileType === "text" && "TXT"}
+                                            </div>
+                                            <div className="list-item-content">
+                                                <div className="list-item-title">
+                                                    {item.fileName}
+                                                </div>
+                                                <div className="list-item-meta">
+                                                    {caseItem && (
+                                                        <>
+                                                            <span>{caseItem.caseNumber}</span>
+                                                            <span>•</span>
+                                                        </>
+                                                    )}
+                                                    <span>{format(new Date(item.uploadedAt), "MMM d, HH:mm")}</span>
+                                                </div>
+                                            </div>
+                                            <div className={`status-indicator status-${item.status.toLowerCase()}`}>
+                                                {item.status === "COMPLETED" && <CheckCircle size={16} />}
+                                                {item.status === "PROCESSING" && <Activity size={16} />}
+                                                {item.status === "RECEIVED" && <Clock size={16} />}
+                                                {item.status === "FAILED" && <XCircle size={16} />}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )
+                    ) : (hasSearched && results.length === 0 ? (
                         <div className="empty-state">
                             <Search size={64} />
                             <h3>No results found</h3>
@@ -219,7 +276,7 @@ export default function SearchPage() {
                                 );
                             })}
                         </div>
-                    )}
+                    ))}
                 </div>
             </div>
         </div>

@@ -7,7 +7,7 @@ import {
 import { useState } from "react";
 
 export default function Layout() {
-    const { user, logout, isInvestigator, isHigherRank } = useAuth();
+    const { user, logout, isDetective, isAdmin, isCaseOfficer, isProsecutor } = useAuth();
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -25,17 +25,26 @@ export default function Layout() {
     };
 
     const navigationLinks = [
-        { to: "/dashboard", icon: Home, label: "Dashboard" },
-        { to: "/cases", icon: Briefcase, label: "Cases" },
-        { to: "/upload", icon: Upload, label: "Upload Evidence" },
-        { to: "/search", icon: Search, label: "Search" },
+        { to: "/dashboard", icon: Home, label: "Dashboard" }
     ];
 
-    if (isInvestigator || isHigherRank) {
+    if (isDetective || isCaseOfficer || isProsecutor) {
+        navigationLinks.push({ to: "/cases", icon: Briefcase, label: "Cases" });
+    }
+
+    if (isDetective || isCaseOfficer) {
+        navigationLinks.push({ to: "/upload", icon: Upload, label: "Upload Evidence" });
+    }
+
+    if (isDetective || isCaseOfficer || isProsecutor) {
+        navigationLinks.push({ to: "/search", icon: Search, label: "Search" });
+    }
+
+    if (isDetective || isProsecutor) {
         navigationLinks.push({ to: "/analytics", icon: BarChart3, label: "Analytics" });
     }
 
-    if (isInvestigator) {
+    if (isAdmin) {
         navigationLinks.push({ to: "/users", icon: Users, label: "Users" });
     }
 

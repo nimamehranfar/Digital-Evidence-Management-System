@@ -59,31 +59,22 @@ export default function AnalyticsPage() {
     };
 
     // Prepare chart data
-    const typeChartData = stats.filesByType.map(item => ({
-        name: item.type.toUpperCase(),
-        value: item.count
-    }));
+    const filesByType = Array.isArray(stats?.filesByType) ? stats.filesByType : [];
+    const filesPerDay = Array.isArray(stats?.filesPerDay) ? stats.filesPerDay : [];
+    const casesByStatus = stats?.casesByStatus && typeof stats.casesByStatus === "object" ? stats.casesByStatus : {};
+    const casesByDepartment = stats?.casesByDepartment && typeof stats.casesByDepartment === "object" ? stats.casesByDepartment : {};
+    const casesByPriority = stats?.casesByPriority && typeof stats.casesByPriority === "object" ? stats.casesByPriority : {};
 
-    const statusChartData = Object.entries(stats.casesByStatus).map(([status, count]) => ({
-        name: status.charAt(0).toUpperCase() + status.slice(1),
-        value: count
-    }));
+    const typeChartData = filesByType.map(item => ({ name: item.type.toUpperCase(), value: item.count }));
+    const statusChartData = Object.entries(casesByStatus).map(([status, count]) => ({ name: status.charAt(0).toUpperCase() + status.slice(1), value: count }));
+    const timelineData = filesPerDay.map(item => ({ date: format(new Date(item.date), "MMM d"), count: item.count }));
+    const deptChartData = Object.entries(casesByDepartment).map(([dept, count]) => ({ name: dept.replace("_", " "), cases: count }));
 
     const priorityChartData = [
-        { name: "High", value: stats.casesByPriority.high || 0 },
-        { name: "Medium", value: stats.casesByPriority.medium || 0 },
-        { name: "Low", value: stats.casesByPriority.low || 0 }
+        { name: "High", value: casesByPriority.high || 0 },
+        { name: "Medium", value: casesByPriority.medium || 0 },
+        { name: "Low", value: casesByPriority.low || 0 },
     ];
-
-    const timelineData = stats.filesPerDay.map(item => ({
-        date: format(new Date(item.date), "MMM d"),
-        count: item.count
-    }));
-
-    const deptChartData = Object.entries(stats.casesByDepartment).map(([dept, count]) => ({
-        name: dept.replace('_', ' '),
-        cases: count
-    }));
 
     return (
         <div className="page-container">

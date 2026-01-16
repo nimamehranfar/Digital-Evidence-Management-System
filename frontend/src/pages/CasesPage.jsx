@@ -40,23 +40,28 @@ export default function CasesPage() {
         return matchesSearch && matchesStatus && matchesPriority;
     });
 
-    const handleCreateCase = (e) => {
+    const handleCreateCase = async (e) => {
         e.preventDefault();
 
         const caseData = {
             ...newCase,
-            tags: newCase.tags.split(",").map(t => t.trim()).filter(Boolean)
+            tags: newCase.tags.split(",").map(t => t.trim()).filter(Boolean),
         };
 
-        createCase(caseData);
-        setShowCreateModal(false);
-        setNewCase({
-            title: "",
-            description: "",
-            priority: "medium",
-            department: user.department,
-            tags: ""
-        });
+        try {
+            await createCase(caseData);
+            setShowCreateModal(false);
+            setNewCase({
+                title: "",
+                description: "",
+                priority: "medium",
+                department: user.department,
+                tags: "",
+            });
+        } catch (err) {
+            console.error("Failed to create case:", err);
+            alert(err.message || "Failed to create case");
+        }
     };
 
     const clearFilters = () => {

@@ -17,9 +17,10 @@ export default function UsersPage() {
     const loadUsers = async () => {
         try {
             const data = await authApi.getUsers();
-            setUsers(data);
+            setUsers(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Failed to load users:", error);
+            setUsers([]);
         } finally {
             setLoading(false);
         }
@@ -31,7 +32,7 @@ export default function UsersPage() {
                 <div className="empty-state">
                     <Users size={64} />
                     <h2>Access Denied</h2>
-                    <p>Only investigators can manage users.</p>
+                    <p>Only admins can manage users.</p>
                 </div>
             </div>
         );

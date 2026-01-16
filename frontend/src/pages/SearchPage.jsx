@@ -29,18 +29,21 @@ export default function SearchPage() {
         .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))
         .slice(0, 5);
 
-    const handleSearch = (e) => {
+    const handleSearch = async (e) => {
         e.preventDefault();
-        const searchResults = searchEvidence({
+
+        const searchResults = await searchEvidence({
             query,
             fileType,
             status,
             caseId: selectedCase
         });
-        console.log(searchResults);
+
+        // console.log(searchResults);
         setResults(searchResults);
         setHasSearched(true);
     };
+
 
     const clearSearch = () => {
         setQuery("");

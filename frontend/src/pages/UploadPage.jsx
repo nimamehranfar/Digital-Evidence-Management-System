@@ -117,20 +117,18 @@ export default function UploadPage() {
         setError("");
 
         try {
-            // Simulate upload delay
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const metadata = {
+                description: description.trim(),
+                tags: tags.split(",").map(t => t.trim()).filter(Boolean)
+            };
 
-            const evidenceData = {
+            await addEvidence({
                 caseId,
                 fileName: selectedFile.name,
                 fileType: getFileType(selectedFile),
                 fileSize: selectedFile.size,
-                description: description.trim(),
-                tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-                status: "COMPLETED"
-            };
-
-            addEvidence(evidenceData);
+                ...metadata
+            });
 
             setUploadSuccess(true);
             setTimeout(() => {
@@ -138,7 +136,7 @@ export default function UploadPage() {
             }, 2000);
 
         } catch (err) {
-            setError("Upload failed. Please try again.");
+            setError(err.message || "Upload failed. Please try again.");
         } finally {
             setUploading(false);
         }

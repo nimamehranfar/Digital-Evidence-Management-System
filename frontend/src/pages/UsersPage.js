@@ -1,67 +1,29 @@
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import * as authApi from "../api/authApi";
 import { Users, Shield, User, Mail, Award } from "lucide-react";
-
-// Mock users data (in a real app, this would come from an API)
-const SYSTEM_USERS = [
-    {
-        id: "u1",
-        username: "admin",
-        email: "admin@evidence.sys",
-        fullName: "Admin Investigator",
-        role: "investigator",
-        department: "headquarters",
-        badge: "INV-001",
-        status: "active",
-        lastLogin: "2026-01-15T14:30:00Z"
-    },
-    {
-        id: "u2",
-        username: "officer",
-        email: "officer@evidence.sys",
-        fullName: "John Officer",
-        role: "officer",
-        department: "district_a",
-        badge: "OFF-102",
-        status: "active",
-        lastLogin: "2026-01-15T09:15:00Z"
-    },
-    {
-        id: "u3",
-        username: "chief",
-        email: "chief@evidence.sys",
-        fullName: "Chief Commander",
-        role: "higher_rank",
-        department: "headquarters",
-        badge: "CHF-001",
-        status: "active",
-        lastLogin: "2026-01-15T08:00:00Z"
-    },
-    {
-        id: "u4",
-        username: "detective",
-        email: "detective@evidence.sys",
-        fullName: "Sarah Detective",
-        role: "investigator",
-        department: "forensics",
-        badge: "INV-045",
-        status: "active",
-        lastLogin: "2026-01-14T17:45:00Z"
-    },
-    {
-        id: "u5",
-        username: "patrol",
-        email: "patrol@evidence.sys",
-        fullName: "Mike Patrol",
-        role: "officer",
-        department: "district_b",
-        badge: "OFF-203",
-        status: "active",
-        lastLogin: "2026-01-13T22:30:00Z"
-    }
-];
 
 export default function UsersPage() {
     const { isInvestigator } = useAuth();
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (isInvestigator) {
+            loadUsers();
+        }
+    }, [isInvestigator]);
+
+    const loadUsers = async () => {
+        try {
+            const data = await authApi.getUsers();
+            setUsers(data);
+        } catch (error) {
+            console.error("Failed to load users:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (!isInvestigator) {
         return (
@@ -70,6 +32,17 @@ export default function UsersPage() {
                     <Users size={64} />
                     <h2>Access Denied</h2>
                     <p>Only investigators can manage users.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="page-container">
+                <div className="loading-screen">
+                    <div className="loading-spinner"></div>
+                    <p>Loading users...</p>
                 </div>
             </div>
         );
@@ -90,6 +63,9 @@ export default function UsersPage() {
             .join(' ');
     };
 
+    const investigators = users.filter(u => u.role === "investigator");
+    const officers = users.filter(u => u.role === "officer");
+
     return (
         <div className="page-container">
             <div className="page-header">
@@ -106,7 +82,7 @@ export default function UsersPage() {
                         <Users size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">{SYSTEM_USERS.length}</div>
+                        <div className="stat-value">{users.length}</div>
                         <div className="stat-label">Total Users</div>
                     </div>
                 </div>
@@ -116,9 +92,7 @@ export default function UsersPage() {
                         <Shield size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">
-                            {SYSTEM_USERS.filter(u => u.role === "investigator").length}
-                        </div>
+                        <div className="stat-value">{investigators.length}</div>
                         <div className="stat-label">Investigators</div>
                     </div>
                 </div>
@@ -128,9 +102,7 @@ export default function UsersPage() {
                         <Award size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">
-                            {SYSTEM_USERS.filter(u => u.role === "officer").length}
-                        </div>
+                        <div className="stat-value">{officers.length}</div>
                         <div className="stat-label">Officers</div>
                     </div>
                 </div>
@@ -155,7 +127,7 @@ export default function UsersPage() {
                             </tr>
                             </thead>
                             <tbody>
-                            {SYSTEM_USERS.map(user => (
+                            {users.map(user => (
                                 <tr key={user.id}>
                                     <td>
                                         <div className="user-cell">

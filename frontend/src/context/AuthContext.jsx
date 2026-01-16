@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import * as authApi from "../api/authApi";
 
 const AuthContext = createContext();
 
@@ -10,90 +11,40 @@ export function useAuth() {
     return context;
 }
 
-// Mock users database
-const MOCK_USERS = [
-    {
-        id: "u1",
-        username: "admin",
-        password: "admin123",
-        email: "admin@evidence.sys",
-        fullName: "Admin Investigator",
-        role: "investigator",
-        department: "headquarters",
-        badge: "INV-001",
-        avatar: null
-    },
-    {
-        id: "u2",
-        username: "officer",
-        password: "officer123",
-        email: "officer@evidence.sys",
-        fullName: "John Officer",
-        role: "officer",
-        department: "district_a",
-        badge: "OFF-102",
-        avatar: null
-    },
-    {
-        id: "u3",
-        username: "chief",
-        password: "chief123",
-        email: "chief@evidence.sys",
-        fullName: "Chief Commander",
-        role: "higher_rank",
-        department: "headquarters",
-        badge: "CHF-001",
-        avatar: null
-    }
-];
-
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         // Check for stored session
-        const storedUser = sessionStorage.getItem("authUser");
-        if (storedUser) {
+        const checkAuth = async () => {
             try {
-                setUser(JSON.parse(storedUser));
-            } catch (e) {
-                sessionStorage.removeItem("authUser");
+                const currentUser = await authApi.getCurrentUser();
+                setUser(currentUser);
+            } catch (error) {
+                // No valid session
+            } finally {
+                setLoading(false);
             }
-        }
-        setLoading(false);
+        };
+        checkAuth();
     }, []);
 
     const login = async (username, password) => {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const foundUser = MOCK_USERS.find(
-            u => u.username === username && u.password === password
-        );
-
-        if (!foundUser) {
-            throw new Error("Invalid username or password");
-        }
-
-        // Don't store password
-        const { password: _, ...userWithoutPassword } = foundUser;
-
-        setUser(userWithoutPassword);
-        sessionStorage.setItem("authUser", JSON.stringify(userWithoutPassword));
-
-        return userWithoutPassword;
+        const userData = await authApi.login(username, password);
+        setUser(userData);
+        return userData;
     };
 
-    const logout = () => {
+    const logout = async () => {
+        await authApi.logout();
         setUser(null);
-        sessionStorage.removeItem("authUser");
     };
 
-    const updateProfile = (updates) => {
-        const updatedUser = { ...user, ...updates };
+    const updateProfile = async (updates) => {
+        const updatedUser = await authApi.updateProfile(updates);
         setUser(updatedUser);
-        sessionStorage.setItem("authUser", JSON.stringify(updatedUser));
+        return updatedUser;
     };
 
     const hasPermission = (requiredRoles) => {
@@ -121,18 +72,14 @@ export function AuthProvider({ children }) {
 
     const canEditCase = (caseItem) => {
         if (!user || !caseItem) return false;
-
-        // Only investigators can edit/delete
         return user.role === "investigator";
     };
 
     const canAddEvidence = () => {
-        // All authenticated users can add evidence
         return !!user;
     };
 
     const canDeleteEvidence = () => {
-        // Only investigators can delete
         return user?.role === "investigator";
     };
 

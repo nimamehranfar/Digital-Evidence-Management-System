@@ -142,12 +142,27 @@ Use one of the demo accounts:
 
 ```
 frontend/
-├── public/                  # Static assets
+├── public/                       # Static assets
+│   ├── index.html
+│   ├── manifest.json
+│   └── robots.txt
 ├── src/
-│   ├── api/                 # API layer
-│   │   ├── apiClient.js     # API switcher
-│   │   ├── mockApi.js       # Mock implementation
-│   │   └── realApi.js       # Production API
+│   ├── api/
+│   │   ├── config.js             # Toggle mock/real
+│   │   ├── authApi.js            # Interface
+│   │   ├── caseApi.js            # Interface
+│   │   ├── evidenceApi.js        # Interface
+│   │   ├── analyticsApi.js       # Interface
+│   │   ├── mock/                 # All mock data here
+│   │   │   ├── mockAuthApi.js
+│   │   │   ├── mockCaseApi.js
+│   │   │   ├── mockEvidenceApi.js
+│   │   │   └── mockAnalyticsApi.js
+│   │   └── real/                 # HTTP implementations
+│   │       ├── realAuthApi.js
+│   │       ├── realCaseApi.js
+│   │       ├── realEvidenceApi.js
+│   │       └── realAnalyticsApi.js
 │   ├── components/          # Reusable components
 │   │   ├── Layout.jsx
 │   │   └── ProtectedRoute.jsx
@@ -326,7 +341,7 @@ For issues and questions:
 ## 📚 Additional Documentation
 
 - [Installation Guide](INSTALLATION.md)
-- [API Contract](docs/api-contract.md)
+- [API ARCHITECTURE](docs/API_ARCHITECTURE.md)
 - [Project Proposal](Digital_Evidence_Management_System_Final_Proposal.pdf)
 
 ---

@@ -1,12 +1,31 @@
-import { useCase } from "../context/CaseContext";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import * as analyticsApi from "../api/analyticsApi";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { BarChart3, TrendingUp, FileText, Activity } from "lucide-react";
-import { format, subDays, parseISO } from "date-fns";
+import { format } from "date-fns";
 
 export default function AnalyticsPage() {
     const { hasPermission } = useAuth();
-    const { getAccessibleCases, evidence } = useCase();
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (hasPermission(["investigator", "higher_rank"])) {
+            loadStats();
+        }
+    }, []);
+
+    const loadStats = async () => {
+        try {
+            const data = await analyticsApi.getStats();
+            setStats(data);
+        } catch (error) {
+            console.error("Failed to load analytics:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (!hasPermission(["investigator", "higher_rank"])) {
         return (
@@ -20,81 +39,49 @@ export default function AnalyticsPage() {
         );
     }
 
-    const cases = getAccessibleCases();
-    const accessibleCaseIds = cases.map(c => c.id);
-    const userEvidence = evidence.filter(e =>
-        accessibleCaseIds.includes(e.caseId)
-    );
-
-    // Evidence by type
-    const evidenceByType = userEvidence.reduce((acc, item) => {
-        acc[item.fileType] = (acc[item.fileType] || 0) + 1;
-        return acc;
-    }, {});
-
-    const typeChartData = Object.entries(evidenceByType).map(([type, count]) => ({
-        name: type.toUpperCase(),
-        value: count
-    }));
+    if (loading || !stats) {
+        return (
+            <div className="page-container">
+                <div className="loading-screen">
+                    <div className="loading-spinner"></div>
+                    <p>Loading analytics...</p>
+                </div>
+            </div>
+        );
+    }
 
     const COLORS = {
-        PDF: "#0088FE",
-        IMAGE: "#00C49F",
-        VIDEO: "#FFBB28",
-        AUDIO: "#FF8042",
-        TEXT: "#8884d8"
+        pdf: "#ef4444",
+        image: "#10b981",
+        video: "#f59e0b",
+        audio: "#8b5cf6",
+        text: "#3b82f6"
     };
 
-    // Cases by status
-    const casesByStatus = cases.reduce((acc, c) => {
-        acc[c.status] = (acc[c.status] || 0) + 1;
-        return acc;
-    }, {});
+    // Prepare chart data
+    const typeChartData = stats.filesByType.map(item => ({
+        name: item.type.toUpperCase(),
+        value: item.count
+    }));
 
-    const statusChartData = Object.entries(casesByStatus).map(([status, count]) => ({
+    const statusChartData = Object.entries(stats.casesByStatus).map(([status, count]) => ({
         name: status.charAt(0).toUpperCase() + status.slice(1),
         value: count
     }));
 
-    // Cases by priority
-    const casesByPriority = cases.reduce((acc, c) => {
-        acc[c.priority] = (acc[c.priority] || 0) + 1;
-        return acc;
-    }, {});
-
     const priorityChartData = [
-        { name: "High", value: casesByPriority.high || 0 },
-        { name: "Medium", value: casesByPriority.medium || 0 },
-        { name: "Low", value: casesByPriority.low || 0 }
+        { name: "High", value: stats.casesByPriority.high || 0 },
+        { name: "Medium", value: stats.casesByPriority.medium || 0 },
+        { name: "Low", value: stats.casesByPriority.low || 0 }
     ];
 
-    // Evidence over time (last 7 days)
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const date = subDays(new Date(), 6 - i);
-        return format(date, "yyyy-MM-dd");
-    });
+    const timelineData = stats.filesPerDay.map(item => ({
+        date: format(new Date(item.date), "MMM d"),
+        count: item.count
+    }));
 
-    const evidenceByDay = last7Days.map(date => {
-        const count = userEvidence.filter(e => {
-            const evidenceDate = format(parseISO(e.uploadedAt), "yyyy-MM-dd");
-            return evidenceDate === date;
-        }).length;
-
-        return {
-            date: format(parseISO(date), "MMM d"),
-            count
-        };
-    });
-
-    // Department statistics
-    const casesByDept = cases.reduce((acc, c) => {
-        const dept = c.department.replace('_', ' ');
-        acc[dept] = (acc[dept] || 0) + 1;
-        return acc;
-    }, {});
-
-    const deptChartData = Object.entries(casesByDept).map(([dept, count]) => ({
-        name: dept,
+    const deptChartData = Object.entries(stats.casesByDepartment).map(([dept, count]) => ({
+        name: dept.replace('_', ' '),
         cases: count
     }));
 
@@ -114,7 +101,7 @@ export default function AnalyticsPage() {
                         <Activity size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">{cases.length}</div>
+                        <div className="stat-value">{stats.totalCases}</div>
                         <div className="stat-label">Total Cases</div>
                     </div>
                 </div>
@@ -124,7 +111,7 @@ export default function AnalyticsPage() {
                         <FileText size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">{userEvidence.length}</div>
+                        <div className="stat-value">{stats.totalFiles}</div>
                         <div className="stat-label">Evidence Items</div>
                     </div>
                 </div>
@@ -134,9 +121,7 @@ export default function AnalyticsPage() {
                         <TrendingUp size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">
-                            {cases.filter(c => c.status === "active").length}
-                        </div>
+                        <div className="stat-value">{stats.activeCases}</div>
                         <div className="stat-label">Active Cases</div>
                     </div>
                 </div>
@@ -146,9 +131,7 @@ export default function AnalyticsPage() {
                         <BarChart3 size={24} />
                     </div>
                     <div className="stat-content">
-                        <div className="stat-value">
-                            {(userEvidence.reduce((sum, e) => sum + e.fileSize, 0) / 1024 / 1024 / 1024).toFixed(2)}
-                        </div>
+                        <div className="stat-value">{stats.totalStorageGB}</div>
                         <div className="stat-label">Total GB</div>
                     </div>
                 </div>
@@ -157,59 +140,63 @@ export default function AnalyticsPage() {
             {/* Charts Grid */}
             <div className="analytics-grid">
                 {/* Evidence by Type */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Evidence by Type</h2>
-                    </div>
-                    <div className="card-content">
-                        <div className="chart-container">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                    <Pie
-                                        data={typeChartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        labelLine={false}
-                                        label={({ name, percent }) =>
-                                            `${name} ${(percent * 100).toFixed(0)}%`
-                                        }
-                                        outerRadius={100}
-                                        fill="#8884d8"
-                                        dataKey="value"
-                                    >
-                                        {typeChartData.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={COLORS[entry.name] || "#999999"}
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
+                {typeChartData.length > 0 && (
+                    <div className="card">
+                        <div className="card-header">
+                            <h2>Evidence by Type</h2>
+                        </div>
+                        <div className="card-content">
+                            <div className="chart-container">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
+                                        <Pie
+                                            data={typeChartData}
+                                            cx="50%"
+                                            cy="50%"
+                                            labelLine={false}
+                                            label={({ name, percent }) =>
+                                                `${name} ${(percent * 100).toFixed(0)}%`
+                                            }
+                                            outerRadius={100}
+                                            fill="#8884d8"
+                                            dataKey="value"
+                                        >
+                                            {typeChartData.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={COLORS[entry.name.toLowerCase()] || "#999999"}
+                                                />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Cases by Status */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Cases by Status</h2>
-                    </div>
-                    <div className="card-content">
-                        <div className="chart-container">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={statusChartData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#0088FE" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                {statusChartData.length > 0 && (
+                    <div className="card">
+                        <div className="card-header">
+                            <h2>Cases by Status</h2>
+                        </div>
+                        <div className="card-content">
+                            <div className="chart-container">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <BarChart data={statusChartData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="name" />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Bar dataKey="value" fill="#0088FE" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Evidence Timeline */}
                 <div className="card card-span-2">
@@ -219,7 +206,7 @@ export default function AnalyticsPage() {
                     <div className="card-content">
                         <div className="chart-container">
                             <ResponsiveContainer width="100%" height={300}>
-                                <LineChart data={evidenceByDay}>
+                                <LineChart data={timelineData}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="date" />
                                     <YAxis />
@@ -239,44 +226,48 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Cases by Priority */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Cases by Priority</h2>
-                    </div>
-                    <div className="card-content">
-                        <div className="chart-container">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={priorityChartData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#FF8042" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                {priorityChartData.some(d => d.value > 0) && (
+                    <div className="card">
+                        <div className="card-header">
+                            <h2>Cases by Priority</h2>
+                        </div>
+                        <div className="card-content">
+                            <div className="chart-container">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <BarChart data={priorityChartData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="name" />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Bar dataKey="value" fill="#FF8042" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Cases by Department */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Cases by Department</h2>
-                    </div>
-                    <div className="card-content">
-                        <div className="chart-container">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={deptChartData} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="number" />
-                                    <YAxis dataKey="name" type="category" width={100} />
-                                    <Tooltip />
-                                    <Bar dataKey="cases" fill="#00C49F" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                {deptChartData.length > 0 && (
+                    <div className="card">
+                        <div className="card-header">
+                            <h2>Cases by Department</h2>
+                        </div>
+                        <div className="card-content">
+                            <div className="chart-container">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <BarChart data={deptChartData} layout="vertical">
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis type="number" />
+                                        <YAxis dataKey="name" type="category" width={100} />
+                                        <Tooltip />
+                                        <Bar dataKey="cases" fill="#00C49F" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* Detailed Stats Table */}
@@ -288,42 +279,27 @@ export default function AnalyticsPage() {
                     <div className="stats-table">
                         <div className="stats-table-row">
                             <span className="stats-table-label">Average Evidence per Case</span>
-                            <span className="stats-table-value">
-                {cases.length > 0
-                    ? (userEvidence.length / cases.length).toFixed(1)
-                    : "0"
-                }
-              </span>
+                            <span className="stats-table-value">{stats.avgEvidencePerCase}</span>
                         </div>
                         <div className="stats-table-row">
                             <span className="stats-table-label">Active Cases</span>
-                            <span className="stats-table-value">
-                {cases.filter(c => c.status === "active").length}
-              </span>
+                            <span className="stats-table-value">{stats.activeCases}</span>
                         </div>
                         <div className="stats-table-row">
                             <span className="stats-table-label">Pending Cases</span>
-                            <span className="stats-table-value">
-                {cases.filter(c => c.status === "pending").length}
-              </span>
+                            <span className="stats-table-value">{stats.pendingCases}</span>
                         </div>
                         <div className="stats-table-row">
                             <span className="stats-table-label">Closed Cases</span>
-                            <span className="stats-table-value">
-                {cases.filter(c => c.status === "closed").length}
-              </span>
+                            <span className="stats-table-value">{stats.closedCases}</span>
                         </div>
                         <div className="stats-table-row">
                             <span className="stats-table-label">High Priority Cases</span>
-                            <span className="stats-table-value">
-                {cases.filter(c => c.priority === "high").length}
-              </span>
+                            <span className="stats-table-value">{stats.highPriorityCases}</span>
                         </div>
                         <div className="stats-table-row">
                             <span className="stats-table-label">Total Storage Used</span>
-                            <span className="stats-table-value">
-                {(userEvidence.reduce((sum, e) => sum + e.fileSize, 0) / 1024 / 1024 / 1024).toFixed(2)} GB
-              </span>
+                            <span className="stats-table-value">{stats.totalStorageGB} GB</span>
                         </div>
                     </div>
                 </div>

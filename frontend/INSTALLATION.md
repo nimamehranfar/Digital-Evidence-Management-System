@@ -45,9 +45,21 @@ frontend/
 │   └── robots.txt
 ├── src/
 │   ├── api/
-│   │   ├── apiClient.js        # API client switcher
-│   │   ├── mockApi.js          # Mock API implementation
-│   │   └── realApi.js          # Real API implementation
+│   │   ├── config.js             # Toggle mock/real
+│   │   ├── authApi.js            # Interface
+│   │   ├── caseApi.js            # Interface
+│   │   ├── evidenceApi.js        # Interface
+│   │   ├── analyticsApi.js       # Interface
+│   │   ├── mock/                 # All mock data here
+│   │   │   ├── mockAuthApi.js
+│   │   │   ├── mockCaseApi.js
+│   │   │   ├── mockEvidenceApi.js
+│   │   │   └── mockAnalyticsApi.js
+│   │   └── real/                 # HTTP implementations
+│   │       ├── realAuthApi.js
+│   │       ├── realCaseApi.js
+│   │       ├── realEvidenceApi.js
+│   │       └── realAnalyticsApi.js
 │   ├── components/
 │   │   ├── Layout.jsx          # Main layout with navigation
 │   │   └── ProtectedRoute.jsx # Route protection
@@ -272,6 +284,16 @@ npm test
 PORT=3001 npm start
 ```
 
+### Test Mock API:
+```bash
+USE_MOCK=true npm start
+```
+
+### Test Real API:
+```bash
+USE_MOCK=false REACT_APP_API_BASE_URL=Address.of.your.url npm start
+```
+
 ### Module Not Found Errors
 
 ```bash
@@ -295,7 +317,7 @@ Clear browser cache and restart dev server
 
 ## Support & Documentation
 
-- Frontend Documentation: `/docs/api-contract.md`
+- Frontend Documentation: `/docs/API_ARCHITECTURE.md`
 - Project Proposal: `/Digital_Evidence_Management_System_Final_Proposal.pdf`
 
 ## License

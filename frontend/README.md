@@ -13,6 +13,10 @@ This system provides secure upload, processing, and analysis of digital evidence
 #### 1. **Admin (System Administrator)**
 - **Purpose**: Platform governance and system configuration
 - **Access**: User management, roles, departments, authentication settings
+  - Add and delete users
+  - Edit user role, department, and badge ID at any time
+  - Manage departments (add, edit display name, delete when not in use)
+  - Username is immutable after creation; users change their own password from Profile
 - **Restrictions**: ZERO access to investigative content (cases, evidence, analytics)
 - **Use Case**: IT administrators, system managers who should not view investigative data
 

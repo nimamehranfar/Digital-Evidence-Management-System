@@ -36,7 +36,7 @@ export const API_CONFIG = {
 
 ## API Modules
 
-### 1. Authentication API (`api/authApi.js`)
+### 1. Authentication & Users API (`api/authApi.js`)
 
 **Mock Implementation:** `api/mock/mockAuthApi.js`  
 **Real Implementation:** `api/real/realAuthApi.js`
@@ -64,6 +64,27 @@ export const API_CONFIG = {
 **`getUsers()`**
 - **Output:** Array of user objects
 - **Real Endpoint:** `GET /api/users`
+
+**`createUser(userData)`** *(admin only)*
+- **Input:** `{ username, password, fullName, email, role, department, badge }`
+- **Output:** Created user object (without password)
+- **Real Endpoint:** `POST /api/users`
+
+**`updateUser(userId, updates)`** *(admin only)*
+- **Input:** `userId: string, updates: { role?, department?, badge?, fullName?, email? }`
+- **Output:** Updated user object
+- **Notes:** `username` and `password` are immutable after creation
+- **Real Endpoint:** `PATCH /api/users/{userId}`
+
+**`deleteUser(userId)`** *(admin only)*
+- **Input:** `userId: string`
+- **Output:** `{ success: true, id: string }`
+- **Real Endpoint:** `DELETE /api/users/{userId}`
+
+**`changePassword(currentPassword, newPassword)`** *(self only)*
+- **Input:** `{ currentPassword: string, newPassword: string }`
+- **Output:** `{ success: true }`
+- **Real Endpoint:** `POST /api/auth/change-password`
 
 ---
 
@@ -214,6 +235,34 @@ export const API_CONFIG = {
 
 ---
 
+### 5. Department API (`api/departmentApi.js`)
+
+**Mock Implementation:** `api/mock/mockDepartmentApi.js`  
+**Real Implementation:** `api/real/realDepartmentApi.js`
+
+#### Methods:
+
+**`getDepartments()`**
+- **Output:** Array of department objects
+- **Real Endpoint:** `GET /api/departments`
+
+**`createDepartment(dept)`** *(admin only)*
+- **Input:** `{ id: string, name: string }`
+- **Output:** Created department object
+- **Real Endpoint:** `POST /api/departments`
+
+**`updateDepartment(deptId, updates)`** *(admin only)*
+- **Input:** `deptId: string, updates: { name: string }`
+- **Output:** Updated department object
+- **Notes:** `id` is immutable (it is the stable key referenced by users/cases)
+- **Real Endpoint:** `PATCH /api/departments/{deptId}`
+
+**`deleteDepartment(deptId)`** *(admin only)*
+- **Input:** `deptId: string`
+- **Output:** `{ success: true, id: string }`
+- **Notes:** Backends should block deletion when the department is assigned to users/cases
+- **Real Endpoint:** `DELETE /api/departments/{deptId}`
+
 ## Data Models
 
 ### User Object
@@ -223,12 +272,20 @@ export const API_CONFIG = {
   username: string,
   email: string,
   fullName: string,
-  role: "investigator" | "officer" | "higher_rank",
+  role: "admin" | "detective" | "case_officer" | "prosecutor",
   department: string,
   badge: string,
   avatar: string | null,
   status?: "active" | "inactive",
   lastLogin?: string (ISO 8601)
+}
+```
+
+### Department Object
+```javascript
+{
+  id: string,   // stable key used across users/cases (e.g. "district_a")
+  name: string  // display name (e.g. "District A")
 }
 ```
 

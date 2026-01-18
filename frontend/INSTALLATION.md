@@ -2,7 +2,7 @@
 
 ## Complete Frontend Application Setup
 
-This is a comprehensive, production-ready Digital Evidence Management System built with React, featuring role-based access control, case management, evidence tracking, and analytics.
+This is a comprehensive Digital Evidence Management System built with React, featuring role-based access control, case management, evidence tracking, analytics, and admin user/department management.
 
 ## Prerequisites
 
@@ -50,22 +50,25 @@ frontend/
 │   │   ├── caseApi.js            # Interface
 │   │   ├── evidenceApi.js        # Interface
 │   │   ├── analyticsApi.js       # Interface
+│   │   ├── departmentApi.js      # Interface
 │   │   ├── mock/                 # All mock data here
 │   │   │   ├── mockAuthApi.js
 │   │   │   ├── mockCaseApi.js
 │   │   │   ├── mockEvidenceApi.js
-│   │   │   └── mockAnalyticsApi.js
+│   │   │   ├── mockAnalyticsApi.js
+│   │   │   └── mockDepartmentApi.js
 │   │   └── real/                 # HTTP implementations
 │   │       ├── realAuthApi.js
 │   │       ├── realCaseApi.js
 │   │       ├── realEvidenceApi.js
-│   │       └── realAnalyticsApi.js
+│   │       ├── realAnalyticsApi.js
+│   │       └── realDepartmentApi.js
 │   ├── components/
 │   │   ├── Layout.jsx          # Main layout with navigation
 │   │   └── ProtectedRoute.jsx # Route protection
 │   ├── context/
-│   │   ├── AuthContext.js      # Authentication context
-│   │   └── CaseContext.js      # Case management context
+│   │   ├── AuthContext.jsx     # Authentication context
+│   │   └── CaseContext.jsx     # Case management context
 │   ├── pages/
 │   │   ├── LoginPage.jsx       # Login page
 │   │   ├── DashboardPage.jsx   # Dashboard
@@ -103,20 +106,25 @@ npm run build
 
 The system includes three demo user accounts with different permission levels:
 
-### Investigator (Full Access)
+### Admin (System Management Only)
 - **Username:** admin
 - **Password:** admin123
-- **Permissions:** Full access to all features including user management, case creation/editing/deletion, analytics
+- **Permissions:** Manage users (role/department/badge), manage departments, update own profile/password
 
-### Officer (Limited Access)
-- **Username:** officer
+### Case Officer (Limited Access)
+- **Username:** officer_hq
 - **Password:** officer123
 - **Permissions:** Can view and upload evidence to cases in their department only
 
-### Higher Rank (Read-Only + Analytics)
-- **Username:** chief
-- **Password:** chief123
-- **Permissions:** Can view all cases across departments, access analytics, upload evidence
+### Detective (Full Operational Access)
+- **Username:** detective
+- **Password:** detective123
+- **Permissions:** Full CRUD on cases/evidence, cross-department search, analytics
+
+### Prosecutor (Read-Only)
+- **Username:** prosecutor
+- **Password:** prosecutor123
+- **Permissions:** Read-only access to all cases/evidence and analytics
 
 ## Features Overview
 
@@ -126,9 +134,10 @@ The system includes three demo user accounts with different permission levels:
 - Role-based access control
 
 ### 2. **Role-Based Permissions**
-- **Investigator**: Full system access
-- **Higher Rank**: Cross-department viewing + analytics
-- **Officer**: Department-specific access
+- **Admin**: Manage users and departments only (no investigative content)
+- **Detective**: Full system access (cases, evidence, analytics)
+- **Case Officer**: Department-scoped access
+- **Prosecutor**: Read-only access to all departments
 
 ### 3. **Case Management**
 - Create, edit, delete cases (investigators only)
@@ -156,10 +165,11 @@ The system includes three demo user accounts with different permission levels:
 - Timeline visualizations
 - Export-ready data
 
-### 7. **User Management**
-- User listing (investigators only)
-- Role assignment viewing
-- Permission overview
+### 7. **User & Department Management**
+- Admin can add/delete users and update role/department/badge at any time
+- Username is immutable after user creation
+- Initial password is set on creation; users change their own password in Profile
+- Admin can add/edit/delete departments (deletion blocked if assigned to users)
 
 ### 8. **Responsive Design**
 - Mobile-first approach
@@ -171,10 +181,10 @@ The system includes three demo user accounts with different permission levels:
 
 ### API Mode Toggle
 
-In `src/api/apiClient.js`, you can switch between mock and real API:
+In `src/api/config.js`, you can switch between mock and real API:
 
 ```javascript
-const USE_MOCK = true; // Change to false when backend is ready
+export const USE_MOCK = true; // Change to false when backend is ready
 ```
 
 ### Environment Variables

@@ -58,3 +58,54 @@ export async function getUsers() {
 
     return handleResponse(response);
 }
+
+// ============================================
+// ADMIN: USER MANAGEMENT
+// ============================================
+
+export async function createUser(userData) {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/api/users`, {
+        method: "POST",
+        headers: API_CONFIG.HEADERS,
+        credentials: "include",
+        body: JSON.stringify(userData)
+    });
+
+    return handleResponse(response);
+}
+
+export async function updateUser(userId, updates) {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/api/users/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        headers: API_CONFIG.HEADERS,
+        credentials: "include",
+        body: JSON.stringify(updates)
+    });
+
+    return handleResponse(response);
+}
+
+export async function deleteUser(userId) {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/api/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers: API_CONFIG.HEADERS,
+        credentials: "include"
+    });
+
+    return handleResponse(response);
+}
+
+// ============================================
+// SELF: PASSWORD CHANGE
+// ============================================
+
+export async function changePassword(currentPassword, newPassword) {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: API_CONFIG.HEADERS,
+        credentials: "include",
+        body: JSON.stringify({ currentPassword, newPassword })
+    });
+
+    return handleResponse(response);
+}

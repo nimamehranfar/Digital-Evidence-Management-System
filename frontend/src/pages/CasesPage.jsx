@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCase } from "../context/CaseContext";
 import {
-    Plus, Search, Filter, Briefcase, AlertCircle,
+    Plus, Search, Filter, Briefcase,
     Activity, Clock, CheckCircle, ChevronRight, X
 } from "lucide-react";
 import { format } from "date-fns";

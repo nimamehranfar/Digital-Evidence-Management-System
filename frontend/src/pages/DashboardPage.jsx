@@ -2,8 +2,8 @@ import { useAuth } from "../context/AuthContext";
 import { useCase } from "../context/CaseContext";
 import { Link } from "react-router-dom";
 import {
-    Briefcase, FileText, AlertCircle, Clock,
-    TrendingUp, Activity, CheckCircle, XCircle
+    Briefcase, FileText, Clock,
+    Activity, CheckCircle, XCircle
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -14,7 +14,6 @@ export default function DashboardPage() {
     const cases = getAccessibleCases();
     const activeCases = cases.filter(c => c.status === "active");
     const pendingCases = cases.filter(c => c.status === "pending");
-    const closedCases = cases.filter(c => c.status === "closed");
 
     // Get evidence for accessible cases
     const accessibleCaseIds = cases.map(c => c.id);

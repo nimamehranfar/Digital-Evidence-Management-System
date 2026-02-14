@@ -10,12 +10,6 @@ export default function AnalyticsPage() {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (hasPermission(["detective", "prosecutor"])) {
-            loadStats();
-        }
-    }, []);
-
     const loadStats = async () => {
         try {
             const data = await analyticsApi.getStats();
@@ -26,6 +20,17 @@ export default function AnalyticsPage() {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        // If the user doesn't have access, stop the loading spinner.
+        if (!hasPermission(["detective", "prosecutor"])) {
+            setLoading(false);
+            return;
+        }
+        loadStats();
+        // hasPermission comes from context; keep it in deps to satisfy exhaustive-deps.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasPermission]);
 
     if (!hasPermission(["detective", "prosecutor"])) {
         return (

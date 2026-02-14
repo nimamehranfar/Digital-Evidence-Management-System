@@ -143,7 +143,8 @@ export async function createCase(caseData) {
 
     const newCase = {
         id: `case${Date.now()}`,
-        caseNumber: `2026-${String(cases.length + 1).padStart(3, '0')}-${deptPrefix}`,
+        // Use department-specific incremental number for a more realistic mock
+        caseNumber: `2026-${String(caseCount).padStart(3, '0')}-${deptPrefix}`,
         status: "active",
         createdBy: currentUser?.id || "unknown",
         assignedTo: [currentUser?.id || "unknown"],

@@ -3,8 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { useCase } from "../context/CaseContext";
 import * as authApi from "../api/authApi";
 import {
-    User, Mail, Shield, Building, Award,
-    Edit, Save, X, Activity, FileText, KeyRound
+    User, Shield, Building, Award,
+    Edit, Save, X, Activity, FileText
 } from "lucide-react";
 import { format } from "date-fns";
 

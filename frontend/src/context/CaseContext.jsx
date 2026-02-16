@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthContext";
 import * as caseApi from "../api/caseApi";
 import * as evidenceApi from "../api/evidenceApi";
@@ -6,151 +6,126 @@ import * as evidenceApi from "../api/evidenceApi";
 const CaseContext = createContext();
 
 export function useCase() {
-    const context = useContext(CaseContext);
-    if (!context) {
-        throw new Error("useCase must be used within CaseProvider");
-    }
-    return context;
+  const context = useContext(CaseContext);
+  if (!context) throw new Error("useCase must be used within CaseProvider");
+  return context;
 }
 
 export function CaseProvider({ children }) {
-    const { user, canAccessCase } = useAuth();
-    const [cases, setCases] = useState([]);
-    const [evidence, setEvidence] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const { user, canAccessDepartment } = useAuth();
+  const [cases, setCases] = useState([]);
+  const [evidence, setEvidence] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user]);
+  useEffect(() => {
+    if (!user) {
+      setCases([]);
+      setEvidence([]);
+      setLoading(false);
+      return;
+    }
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const [casesData, evidenceData] = await Promise.all([
-                caseApi.getCases(),
-                evidenceApi.getEvidence()
-            ]);
-            setCases(Array.isArray(casesData) ? casesData : []);
-            setEvidence(Array.isArray(evidenceData) ? evidenceData : []);
-        } catch (error) {
-            console.error("Failed to load data:", error);
-            setCases([]);
-            setEvidence([]);
-        } finally {
-            setLoading(false);
-        }
-    };
+  async function loadData() {
+    try {
+      setLoading(true);
+      const [casesData, evidenceData] = await Promise.all([caseApi.getCases(), evidenceApi.getEvidence()]);
+      setCases(Array.isArray(casesData) ? casesData : []);
+      setEvidence(Array.isArray(evidenceData) ? evidenceData : []);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    const getAccessibleCases = () => {
-        if (!user) return [];
-        if (!Array.isArray(cases)) return [];
-        return cases.filter(c => canAccessCase(c));
-    };
+  const accessibleCases = useMemo(() => {
+    if (!user) return [];
+    const all = Array.isArray(cases) ? cases : [];
+    return all.filter((c) => canAccessDepartment(c.department));
+  }, [cases, user, canAccessDepartment]);
 
-    const getCaseById = (caseId) => {
-        if (!Array.isArray(cases)) return null;
-        return cases.find(c => c.id === caseId);
-    };
+  function getAccessibleCases() {
+    return accessibleCases;
+  }
 
-    const getEvidenceByCase = (caseId) => {
-        if (!Array.isArray(evidence)) return [];
-        return evidence.filter(e => e.caseId === caseId);
-    };
+  async function createCase(payload) {
+    const created = await caseApi.createCase(payload);
+    setCases((prev) => [created, ...(prev || [])]);
+    return created;
+  }
 
-    const createCase = async (caseData) => {
-        const newCase = await caseApi.createCase(caseData);
-        setCases(prevCases => [...(Array.isArray(prevCases) ? prevCases : []), newCase]);
-        return newCase;
-    };
+  async function updateCase(caseId, payload) {
+    const updated = await caseApi.updateCase(caseId, payload);
+    setCases((prev) => (prev || []).map((c) => (c.id === caseId ? updated : c)));
+    return updated;
+  }
 
-    const updateCase = async (caseId, updates) => {
-        const updatedCase = await caseApi.updateCase(caseId, updates);
-        setCases(prevCases =>
-            (Array.isArray(prevCases) ? prevCases : []).map(c => c.id === caseId ? updatedCase : c)
-        );
-        return updatedCase;
-    };
+  async function deleteCase(caseId) {
+    await caseApi.deleteCase(caseId);
+    setCases((prev) => (prev || []).filter((c) => c.id !== caseId));
+    setEvidence((prev) => (prev || []).filter((e) => e.caseId !== caseId));
+    return true;
+  }
 
-    const deleteCase = async (caseId) => {
-        await caseApi.deleteCase(caseId);
-        setCases(prevCases => (Array.isArray(prevCases) ? prevCases : []).filter(c => c.id !== caseId));
-        // Also remove associated evidence
-        setEvidence(prevEvidence => (Array.isArray(prevEvidence) ? prevEvidence : []).filter(e => e.caseId !== caseId));
-    };
+  async function addCaseNote(caseId, text) {
+    return caseApi.addCaseNote(caseId, { text });
+  }
 
-    const addCaseNote = async (caseId, noteText) => {
-        const updatedCase = await caseApi.addCaseNote(caseId, noteText);
-        setCases(prevCases =>
-            (Array.isArray(prevCases) ? prevCases : []).map(c => c.id === caseId ? updatedCase : c)
-        );
-        return updatedCase;
-    };
+  async function uploadEvidenceSas({ caseId, file, description, tags }) {
+    if (!caseId) throw new Error("caseId is required");
+    if (!file) throw new Error("file is required");
 
-    const deleteCaseNote = async (caseId, noteId) => {
-        const updatedCase = await caseApi.deleteCaseNote(caseId, noteId);
-        setCases(prevCases =>
-            (Array.isArray(prevCases) ? prevCases : []).map(c => c.id === caseId ? updatedCase : c)
-        );
-        return updatedCase;
-    };
+    // 1) upload-init
+    const init = await evidenceApi.uploadInit({
+      caseId,
+      fileName: file.name,
+      fileType: file.type || "application/octet-stream",
+    });
 
-    const addEvidence = async (evidenceData) => {
-        const newEvidence = await evidenceApi.createEvidence(evidenceData);
-        setEvidence(prevEvidence => [...(Array.isArray(prevEvidence) ? prevEvidence : []), newEvidence]);
+    // 2) PUT to SAS URL (mock uses a mock scheme and will no-op)
+    await evidenceApi.uploadToSasUrl(init.sasUrl, file);
 
-        // Refresh case to update timestamp
-        if (evidenceData.caseId) {
-            try {
-                const updatedCase = await caseApi.getCase(evidenceData.caseId);
-                setCases(prevCases =>
-                    (Array.isArray(prevCases) ? prevCases : []).map(c => c.id === evidenceData.caseId ? updatedCase : c)
-                );
-            } catch (error) {
-                console.error("Failed to refresh case:", error);
-            }
-        }
+    // 3) upload-confirm
+    const confirmed = await evidenceApi.uploadConfirm({
+      evidenceId: init.evidenceId,
+      caseId,
+      blobPath: init.blobPath,
+      fileName: file.name,
+      fileType: file.type || "application/octet-stream",
+      description: description || "",
+      tags: tags || [],
+    });
 
-        return newEvidence;
-    };
+    setEvidence((prev) => [confirmed, ...(prev || [])]);
 
-    const updateEvidence = async (evidenceId, updates) => {
-        const updatedEvidence = await evidenceApi.updateEvidence(evidenceId, updates);
-        setEvidence(prevEvidence =>
-            (Array.isArray(prevEvidence) ? prevEvidence : []).map(e => e.id === evidenceId ? updatedEvidence : e)
-        );
-        return updatedEvidence;
-    };
+    return confirmed;
+  }
 
-    const deleteEvidence = async (evidenceId) => {
-        await evidenceApi.deleteEvidence(evidenceId);
-        setEvidence(prevEvidence => (Array.isArray(prevEvidence) ? prevEvidence : []).filter(e => e.id !== evidenceId));
-    };
+  async function refreshEvidenceStatus(evidenceId) {
+    return evidenceApi.getEvidenceStatus(evidenceId);
+  }
 
-    const searchEvidence = async (filters) => {
-        const results = await evidenceApi.searchEvidence(filters);
-        return Array.isArray(results) ? results : [];
-    };
+  async function deleteEvidence(evidenceId) {
+    await evidenceApi.deleteEvidence(evidenceId);
+    setEvidence((prev) => (prev || []).filter((e) => e.id !== evidenceId));
+    return true;
+  }
 
-    const value = {
-        cases: Array.isArray(cases) ? cases : [],
-        evidence: Array.isArray(evidence) ? evidence : [],
-        loading,
-        getAccessibleCases,
-        getCaseById,
-        getEvidenceByCase,
-        createCase,
-        updateCase,
-        deleteCase,
-        addCaseNote,
-        deleteCaseNote,
-        addEvidence,
-        updateEvidence,
-        deleteEvidence,
-        searchEvidence,
-        refreshData: loadData
-    };
+  const value = {
+    loading,
+    cases,
+    evidence,
+    getAccessibleCases,
+    createCase,
+    updateCase,
+    deleteCase,
+    addCaseNote,
+    uploadEvidenceSas,
+    refreshEvidenceStatus,
+    deleteEvidence,
+    reload: loadData,
+  };
 
-    return <CaseContext.Provider value={value}>{children}</CaseContext.Provider>;
+  return <CaseContext.Provider value={value}>{children}</CaseContext.Provider>;
 }

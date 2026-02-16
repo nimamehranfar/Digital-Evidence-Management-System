@@ -1886,52 +1886,7 @@ code {
 
 .evidence-preview p {
     color: var(--color-text-secondary);
-    line-height: 1.6;
 }
-
-/* ==============================================
-   ANALYTICS PAGE
-   ============================================== */
-
-.analytics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-    gap: var(--spacing-xl);
-    margin-bottom: var(--spacing-xl);
-}
-
-.chart-container {
-    min-height: 300px;
-}
-
-.stats-table {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--color-border-light);
-    border-radius: var(--radius);
-    overflow: hidden;
-}
-
-.stats-table-row {
-    background: var(--color-bg-secondary);
-    padding: var(--spacing-lg);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.stats-table-label {
-    font-weight: 500;
-    color: var(--color-text-primary);
-}
-
-.stats-table-value {
-    font-weight: 700;
-    color: var(--color-primary);
-    font-size: 1.125rem;
-}
-
 /* ==============================================
    USERS PAGE
    ============================================== */
@@ -2277,9 +2232,6 @@ code {
    ============================================== */
 
 @media (max-width: 1200px) {
-    .analytics-grid {
-        grid-template-columns: 1fr;
-    }
 
     .case-detail-grid {
         grid-template-columns: 1fr;
@@ -2663,4 +2615,30 @@ code {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+}
+
+/* Simple status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-right: 12px;
+}
+
+.badge.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+
+/* Two-column layout helper */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--spacing-lg);
 }

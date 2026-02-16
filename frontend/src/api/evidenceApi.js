@@ -4,10 +4,12 @@ import * as realEvidenceApi from "./real/realEvidenceApi";
 
 const api = USE_MOCK ? mockEvidenceApi : realEvidenceApi;
 
+export const uploadInit = api.uploadInit;
+export const uploadToSasUrl = api.uploadToSasUrl;
+export const uploadConfirm = api.uploadConfirm;
+
 export const getEvidence = api.getEvidence;
 export const getEvidenceById = api.getEvidenceById;
-export const createEvidence = api.createEvidence;
-export const updateEvidence = api.updateEvidence;
 export const deleteEvidence = api.deleteEvidence;
+export const getEvidenceStatus = api.getEvidenceStatus;
 export const searchEvidence = api.searchEvidence;
-export const uploadFile = api.uploadFile;

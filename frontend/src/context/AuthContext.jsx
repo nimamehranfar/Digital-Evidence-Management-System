@@ -1,305 +1,180 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { USE_MOCK } from "../api/config";
 import * as authApi from "../api/authApi";
+import { msalInstance, ensureActiveAccount } from "../auth/msalInstance";
+import { EventType } from "@azure/msal-browser";
 
 const AuthContext = createContext();
 
 export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error("useAuth must be used within AuthProvider");
-    }
-    return context;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 }
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [authTick, setAuthTick] = useState(0);
 
-    useEffect(() => {
-        // Check for stored session
-        const checkAuth = async () => {
-            try {
-                const currentUser = await authApi.getCurrentUser();
-                setUser(currentUser);
-            } catch (error) {
-                // No valid session
-            } finally {
-                setLoading(false);
-            }
-        };
-        checkAuth();
-    }, []);
+  // Real-mode: listen to MSAL events so we can refresh /api/auth/me after login/logout.
+  useEffect(() => {
+    if (USE_MOCK) return;
 
-    const login = async (username, password) => {
-        const userData = await authApi.login(username, password);
-        setUser(userData);
-        return userData;
+    const callbackId = msalInstance.addEventCallback((event) => {
+      // Keep active account stable (helps silent token acquisition).
+      if (event.eventType === EventType.LOGIN_SUCCESS && event.payload?.account) {
+        msalInstance.setActiveAccount(event.payload.account);
+      }
+
+      // Any account or auth change should trigger a reload.
+      const shouldTick =
+        event.eventType === EventType.LOGIN_SUCCESS ||
+        event.eventType === EventType.LOGOUT_SUCCESS ||
+        event.eventType === EventType.ACCOUNT_ADDED ||
+        event.eventType === EventType.ACCOUNT_REMOVED;
+
+      if (shouldTick) setAuthTick((t) => t + 1);
+    });
+
+    // Best-effort: ensure we have an active account on first mount.
+    ensureActiveAccount().catch(() => {});
+
+    return () => {
+      if (callbackId) msalInstance.removeEventCallback(callbackId);
     };
+  }, []);
 
-    const logout = async () => {
-        await authApi.logout();
-        setUser(null);
+  // Load user from /api/auth/me (real) or localStorage (mock).
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setAuthError("");
+
+      try {
+        const u = await authApi.getCurrentUser();
+        if (!cancelled) setUser(u);
+      } catch (e) {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (USE_MOCK) {
+      load();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      setUser(null);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Ensure active account exists before calling backend (token acquisition needs it).
+    ensureActiveAccount()
+      .catch(() => {})
+      .finally(() => load());
+
+    return () => {
+      cancelled = true;
     };
-
-    const updateProfile = async (updates) => {
-        const updatedUser = await authApi.updateProfile(updates);
-        setUser(updatedUser);
-        return updatedUser;
-    };
-
-    const hasPermission = (requiredRoles) => {
-        if (!user) return false;
-        if (!requiredRoles || requiredRoles.length === 0) return true;
-        return requiredRoles.includes(user.role);
-    };
-
-    // ============================================
-    // ROLE CHECKERS
-    // ============================================
-
-    // Admin: System management only, NO investigative access
-    const isAdmin = () => user?.role === "admin";
-
-    // Detective: Full cross-department investigative access
-    const isDetective = () => user?.role === "detective";
-
-    // Case Officer: Department-scoped investigative access
-    const isCaseOfficer = () => user?.role === "case_officer";
-
-    // Prosecutor: Read-only access to all cases/evidence
-    const isProsecutor = () => user?.role === "prosecutor";
-
-    // ============================================
-    // CASE ACCESS PERMISSIONS
-    // ============================================
-
-    // Can view case details
-    const canAccessCase = (caseItem) => {
-        if (!user || !caseItem) return false;
-
-        // Admin has NO access to investigative content
-        if (isAdmin()) return false;
-
-        // Detective can access all cases
-        if (isDetective()) return true;
-
-        // Prosecutor can view all cases (read-only)
-        if (isProsecutor()) return true;
-
-        // Case Officer can only access cases from their department
-        if (isCaseOfficer()) {
-            return caseItem.department === user.department;
-        }
-
-        return false;
-    };
-
-    // Can create new cases
-    const canCreateCase = () => {
-        if (!user) return false;
-
-        // Only Detective and Case Officer can create cases
-        return isDetective() || isCaseOfficer();
-    };
-
-    // Can edit case details (title, description, status, etc.)
-    const canEditCase = (caseItem) => {
-        if (!user || !caseItem) return false;
-
-        // Admin and Prosecutor cannot edit
-        if (isAdmin() || isProsecutor()) return false;
-
-        // Detective can edit all cases
-        if (isDetective()) return true;
-
-        // Case Officer can edit only their department's cases
-        if (isCaseOfficer()) {
-            return caseItem.department === user.department;
-        }
-
-        return false;
-    };
-
-    // Can delete cases
-    const canDeleteCase = (caseItem) => {
-        if (!user || !caseItem) return false;
-
-        // Only Detective can delete cases
-        return isDetective();
-    };
-
-    // ============================================
-    // EVIDENCE PERMISSIONS
-    // ============================================
-
-    // Can upload evidence
-    const canAddEvidence = () => {
-        if (!user) return false;
-
-        // Admin and Prosecutor cannot upload evidence
-        if (isAdmin() || isProsecutor()) return false;
-
-        // Detective and Case Officer can upload
-        return isDetective() || isCaseOfficer();
-    };
-
-    // Can edit evidence metadata (description, user tags)
-    const canEditEvidence = (evidence) => {
-        if (!user || !evidence) return false;
-
-        // Admin and Prosecutor cannot edit
-        if (isAdmin() || isProsecutor()) return false;
-
-        // Detective can edit all evidence
-        if (isDetective()) return true;
-
-        // Case Officer can edit evidence from their department's cases
-        // This requires case lookup, simplified to allow if uploaded by user
-        if (isCaseOfficer()) {
-            return evidence.uploadedBy === user.id;
-        }
-
-        return false;
-    };
-
-    // Can delete evidence
-    const canDeleteEvidence = () => {
-        if (!user) return false;
-
-        // Only Detective can delete evidence
-        return isDetective();
-    };
-
-    // ============================================
-    // NOTE PERMISSIONS
-    // ============================================
-
-    // Can add notes to cases
-    const canAddNote = (caseItem) => {
-        if (!user || !caseItem) return false;
-
-        // Admin cannot add notes
-        if (isAdmin()) return false;
-
-        // Everyone else with case access can add notes
-        return canAccessCase(caseItem);
-    };
-
-    // Can delete notes
-    const canDeleteNote = (note, caseItem) => {
-        if (!user || !note || !caseItem) return false;
-
-        // Admin cannot interact with notes
-        if (isAdmin()) return false;
-
-        // Detective can delete any note
-        if (isDetective()) return true;
-
-        // Case Officer and Prosecutor can delete only their own notes
-        return note.createdBy === user.id;
-    };
-
-    // ============================================
-    // ANALYTICS & SEARCH PERMISSIONS
-    // ============================================
-
-    // Can access analytics dashboard
-    const canAccessAnalytics = () => {
-        if (!user) return false;
-
-        // Admin cannot access analytics (no investigative data)
-        if (isAdmin()) return false;
-
-        // Everyone else can access analytics
-        return true;
-    };
-
-    // Can perform cross-department searches
-    const canSearchAllDepartments = () => {
-        if (!user) return false;
-
-        // Detective and Prosecutor can search across departments
-        return isDetective() || isProsecutor();
-    };
-
-    // ============================================
-    // USER MANAGEMENT PERMISSIONS
-    // ============================================
-
-    // Can manage users (create, edit, delete, assign roles)
-    const canManageUsers = () => {
-        return isAdmin();
-    };
-
-    // Can view user list
-    const canViewUsers = () => {
-        return isAdmin();
-    };
-
-    // ============================================
-    // SYSTEM CONFIGURATION PERMISSIONS
-    // ============================================
-
-    // Can manage departments
-    const canManageDepartments = () => {
-        return isAdmin();
-    };
-
-    // Can configure authentication settings
-    const canManageAuth = () => {
-        return isAdmin();
-    };
-
-    // Can view audit logs
-    const canViewAuditLogs = () => {
-        return isAdmin() || isDetective();
-    };
-
-    const value = {
-        user,
-        loading,
-        login,
-        logout,
-        updateProfile,
-        hasPermission,
-
-        // Role checkers
-        isAdmin: isAdmin(),
-        isDetective: isDetective(),
-        isCaseOfficer: isCaseOfficer(),
-        isProsecutor: isProsecutor(),
-
-        // Case permissions
-        canAccessCase,
-        canCreateCase,
-        canEditCase,
-        canDeleteCase,
-
-        // Evidence permissions
-        canAddEvidence,
-        canEditEvidence,
-        canDeleteEvidence,
-
-        // Note permissions
-        canAddNote,
-        canDeleteNote,
-
-        // Analytics & Search
-        canAccessAnalytics,
-        canSearchAllDepartments,
-
-        // User management
-        canManageUsers,
-        canViewUsers,
-
-        // System configuration
-        canManageDepartments,
-        canManageAuth,
-        canViewAuditLogs,
-
-        // Utility
-        isAuthenticated: !!user
-    };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  }, [authTick]);
+
+  const roles = useMemo(() => {
+    const r = user?.roles;
+    return Array.isArray(r) ? r : [];
+  }, [user]);
+
+  const isAdmin = roles.includes("admin");
+  const isDetective = roles.includes("detective");
+  const isCaseOfficer = roles.includes("case_officer");
+  const isProsecutor = roles.includes("prosecutor");
+
+  const isInvestigative = isDetective || isCaseOfficer || isProsecutor;
+
+  function canAccessDepartment(deptId) {
+    if (!deptId) return false;
+    if (isDetective || isProsecutor) return true;
+    if (isCaseOfficer) return user?.department === deptId;
+    return false; // admin has zero investigative access
+  }
+
+  function canCreateOrEditCases() {
+    return isDetective || isCaseOfficer;
+  }
+
+  function canDeleteCases() {
+    return isDetective || isCaseOfficer;
+  }
+
+  function canAddEvidence() {
+    return isDetective || isCaseOfficer;
+  }
+
+  function canDeleteEvidence() {
+    return isDetective || isCaseOfficer;
+  }
+
+  function canManageDepartments() {
+    return isAdmin;
+  }
+
+  function canManageUsers() {
+    return isAdmin;
+  }
+
+  async function login(mockOptions) {
+    setAuthError("");
+    if (USE_MOCK) {
+      const u = await authApi.login(mockOptions);
+      setUser(u);
+      return u;
+    }
+    return authApi.login(); // redirect
+  }
+
+  async function logout() {
+    if (USE_MOCK) {
+      await authApi.logout();
+      setUser(null);
+      return;
+    }
+    return authApi.logout(); // redirect
+  }
+
+  const value = {
+    user,
+    loading,
+    authError,
+
+    roles,
+    isAdmin,
+    isDetective,
+    isCaseOfficer,
+    isProsecutor,
+    isInvestigative,
+
+    login,
+    logout,
+
+    canAccessDepartment,
+    canCreateOrEditCases,
+    canDeleteCases,
+    canAddEvidence,
+    canDeleteEvidence,
+    canManageDepartments,
+    canManageUsers,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

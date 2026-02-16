@@ -1,36 +1,25 @@
-# Digital Evidence Management System
+# Digital Evidence Management System (DEMS)
 
-React-based Digital Evidence Management System with a clean API abstraction layer that can switch between **mock** and **real** backends using a single flag.
+A cloud-based digital evidence management system with strict RBAC, SAS-based evidence uploads, and Azure Search indexing.
 
-## Repo Layout
+Repo layout:
 
-- `frontend/` — React app (routing, UI, contexts, API layer)
-- `backend/` — Not specified yet
-- `docs/` — Architecture and API documentation
+- `frontend/` — React app (MSAL redirect auth + mock/real API toggle)
+- `backend/` — Azure Functions (Node.js + TypeScript), fronted by APIM
+- `docs/` — Project documentation
 
-## Running the Frontend
+## Quick start (frontend)
 
 ```bash
 cd frontend
-cd backend
 npm install
 npm start
 ```
 
-### Switch Mock ↔ Real APIs
+For real-mode environment variables and the full frontend guide, see: `frontend/README.md`.
 
-In `frontend/src/api/config.js`:
+## Docs
 
-```js
-export const USE_MOCK = true; // false => real API
-```
-
-When `USE_MOCK=false`, the Real API implementations call the following base URL:
-
-- `REACT_APP_API_BASE_URL` (if set), otherwise `http://localhost:7071`
-
-
-
-## Documentation
-
-- API modules and endpoint map: `docs/API_ARCHITECTURE.md`
+- `docs/API_ARCHITECTURE.md` — Final API contract + cloud architecture
+- `docs/FRONTEND_GUIDE.md` — Frontend behavior: auth, RBAC, mock/real parity
+- `docs/DEMO_CHECKLIST.md` — Step-by-step demo validation (mock + real)

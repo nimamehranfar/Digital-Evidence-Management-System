@@ -1,217 +1,130 @@
-import { useAuth } from "../context/AuthContext";
 import { useCase } from "../context/CaseContext";
 import { Link } from "react-router-dom";
-import {
-    Briefcase, FileText, Clock,
-    Activity, CheckCircle, XCircle
-} from "lucide-react";
+import { Briefcase, FileText, Clock, CheckCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
+import { useAuth } from "../context/AuthContext";
+
+function statusIcon(status) {
+  const s = (status || "").toUpperCase();
+  if (s === "COMPLETED") return <CheckCircle size={18} className="status-icon success" />;
+  if (s === "FAILED") return <XCircle size={18} className="status-icon error" />;
+  return <Clock size={18} className="status-icon pending" />;
+}
 
 export default function DashboardPage() {
-    const { user } = useAuth();
-    const { getAccessibleCases, evidence } = useCase();
+  const { user, isProsecutor } = useAuth();
+  const { getAccessibleCases, evidence } = useCase();
 
-    const cases = getAccessibleCases();
-    const activeCases = cases.filter(c => c.status === "active");
-    const pendingCases = cases.filter(c => c.status === "pending");
+  const cases = getAccessibleCases();
+  const openCases = cases.filter((c) => (c.status || "").toUpperCase() === "OPEN");
+  const otherCases = cases.filter((c) => (c.status || "").toUpperCase() !== "OPEN");
 
-    // Get evidence for accessible cases
-    const accessibleCaseIds = cases.map(c => c.id);
-    const userEvidence = evidence.filter(e =>
-        accessibleCaseIds.includes(e.caseId)
-    );
+  const accessibleCaseIds = cases.map((c) => c.id);
+  const recentEvidence = (evidence || [])
+    .filter((e) => accessibleCaseIds.includes(e.caseId))
+    .slice()
+    .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
+    .slice(0, 6);
 
-    const recentEvidence = [...userEvidence]
-        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))
-        .slice(0, 5);
-
-    const recentCases = [...cases]
-        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-        .slice(0, 5);
-
-    const stats = [
-        {
-            label: "Total Cases",
-            value: cases.length,
-            icon: Briefcase,
-            color: "blue",
-            link: "/cases"
-        },
-        {
-            label: "Active Cases",
-            value: activeCases.length,
-            icon: Activity,
-            color: "green",
-            link: "/cases?status=active"
-        },
-        {
-            label: "Evidence Items",
-            value: userEvidence.length,
-            icon: FileText,
-            color: "purple",
-            link: "/search"
-        },
-        {
-            label: "Pending Cases",
-            value: pendingCases.length,
-            icon: Clock,
-            color: "orange",
-            link: "/cases?status=pending"
-        }
-    ];
-
-    return (
-        <div className="page-container">
-            <div className="page-header">
-                <div>
-                    <h1>Dashboard</h1>
-                    <p>Welcome back, {user.fullName}</p>
-                </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="stats-grid">
-                {stats.map((stat, index) => (
-                    <Link
-                        key={index}
-                        to={stat.link}
-                        className="stat-card"
-                    >
-                        <div className={`stat-icon stat-icon-${stat.color}`}>
-                            <stat.icon size={24} />
-                        </div>
-                        <div className="stat-content">
-                            <div className="stat-value">{stat.value}</div>
-                            <div className="stat-label">{stat.label}</div>
-                        </div>
-                    </Link>
-                ))}
-            </div>
-
-            <div className="dashboard-grid">
-                {/* Recent Cases */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Recent Cases</h2>
-                        <Link to="/cases" className="link-text">View All</Link>
-                    </div>
-                    <div className="card-content">
-                        {recentCases.length === 0 ? (
-                            <div className="empty-state">
-                                <Briefcase size={48} />
-                                <p>No cases available</p>
-                            </div>
-                        ) : (
-                            <div className="list">
-                                {recentCases.map(caseItem => (
-                                    <Link
-                                        key={caseItem.id}
-                                        to={`/cases/${caseItem.id}`}
-                                        className="list-item"
-                                    >
-                                        <div className="list-item-content">
-                                            <div className="list-item-header">
-                        <span className="list-item-title">
-                          {caseItem.title}
-                        </span>
-                                                <span className={`badge badge-${caseItem.priority}`}>
-                          {caseItem.priority}
-                        </span>
-                                            </div>
-                                            <div className="list-item-meta">
-                                                <span>{caseItem.caseNumber}</span>
-                                                <span>•</span>
-                                                <span>{format(new Date(caseItem.updatedAt), "MMM d, yyyy")}</span>
-                                            </div>
-                                        </div>
-                                        <div className={`status-indicator status-${caseItem.status}`}>
-                                            {caseItem.status === "active" && <Activity size={16} />}
-                                            {caseItem.status === "pending" && <Clock size={16} />}
-                                            {caseItem.status === "closed" && <CheckCircle size={16} />}
-                                        </div>
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Recent Evidence */}
-                <div className="card">
-                    <div className="card-header">
-                        <h2>Recent Evidence</h2>
-                        <Link to="/search" className="link-text">View All</Link>
-                    </div>
-                    <div className="card-content">
-                        {recentEvidence.length === 0 ? (
-                            <div className="empty-state">
-                                <FileText size={48} />
-                                <p>No evidence uploaded yet</p>
-                            </div>
-                        ) : (
-                            <div className="list">
-                                {recentEvidence.map(item => {
-                                    const caseItem = cases.find(c => c.id === item.caseId);
-                                    return (
-                                        <div key={item.id} className="list-item">
-                                            <div className={`file-icon file-icon-${item.fileType}`}>
-                                                {item.fileType === "pdf" && "PDF"}
-                                                {item.fileType === "image" && "IMG"}
-                                                {item.fileType === "audio" && "AUD"}
-                                                {item.fileType === "video" && "VID"}
-                                                {item.fileType === "text" && "TXT"}
-                                            </div>
-                                            <div className="list-item-content">
-                                                <div className="list-item-title">
-                                                    {item.fileName}
-                                                </div>
-                                                <div className="list-item-meta">
-                                                    {caseItem && (
-                                                        <>
-                                                            <span>{caseItem.caseNumber}</span>
-                                                            <span>•</span>
-                                                        </>
-                                                    )}
-                                                    <span>{format(new Date(item.uploadedAt), "MMM d, HH:mm")}</span>
-                                                </div>
-                                            </div>
-                                            <div className={`status-indicator status-${item.status.toLowerCase()}`}>
-                                                {item.status === "COMPLETED" && <CheckCircle size={16} />}
-                                                {item.status === "PROCESSING" && <Activity size={16} />}
-                                                {item.status === "RECEIVED" && <Clock size={16} />}
-                                                {item.status === "FAILED" && <XCircle size={16} />}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="card">
-                <div className="card-header">
-                    <h2>Quick Actions</h2>
-                </div>
-                <div className="card-content">
-                    <div className="quick-actions">
-                        <Link to="/upload" className="quick-action-btn">
-                            <FileText size={20} />
-                            <span>Upload Evidence</span>
-                        </Link>
-                        <Link to="/cases" className="quick-action-btn">
-                            <Briefcase size={20} />
-                            <span>View Cases</span>
-                        </Link>
-                        <Link to="/search" className="quick-action-btn">
-                            <Activity size={20} />
-                            <span>Search Evidence</span>
-                        </Link>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Welcome, {user?.name || "User"}.</p>
         </div>
-    );
+      </div>
+
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">
+            <Briefcase size={24} />
+          </div>
+          <div className="stat-content">
+            <div className="stat-value">{cases.length}</div>
+            <div className="stat-label">Accessible cases</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            <FileText size={24} />
+          </div>
+          <div className="stat-content">
+            <div className="stat-value">{recentEvidence.length}</div>
+            <div className="stat-label">Recent evidence items</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header">
+            <h2>Cases</h2>
+            <Link to="/cases" className="link-button">
+              View all
+            </Link>
+          </div>
+          <div className="card-content">
+            {openCases.slice(0, 5).map((c) => (
+              <Link key={c.id} to={`/cases/${c.id}`} className="list-item">
+                <div className="list-item-title">{c.title || c.id}</div>
+                <div className="list-item-meta">
+                  <span>{c.department}</span>
+                  <span>•</span>
+                  <span>{(c.status || "OPEN").toUpperCase()}</span>
+                </div>
+              </Link>
+            ))}
+            {openCases.length === 0 ? <p className="muted">No open cases.</p> : null}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h2>Recent evidence</h2>
+            <Link to="/search" className="link-button">
+              Search
+            </Link>
+          </div>
+          <div className="card-content">
+            {recentEvidence.map((e) => (
+              <div key={e.id} className="list-item">
+                <div className="list-item-title">
+                  {statusIcon(e.status)} {e.fileName || e.id}
+                </div>
+                <div className="list-item-meta">
+                  <span>{e.caseId}</span>
+                  <span>•</span>
+                  <span>{e.uploadedAt ? format(new Date(e.uploadedAt), "PPp") : "—"}</span>
+                </div>
+              </div>
+            ))}
+            {recentEvidence.length === 0 ? <p className="muted">No evidence uploaded yet.</p> : null}
+            {isProsecutor ? <p className="muted">Read-only role: uploads and edits are disabled.</p> : null}
+          </div>
+        </div>
+      </div>
+
+      {otherCases.length > 0 ? (
+        <div className="card">
+          <div className="card-header">
+            <h2>Other case statuses</h2>
+          </div>
+          <div className="card-content">
+            {otherCases.slice(0, 6).map((c) => (
+              <div key={c.id} className="list-item">
+                <div className="list-item-title">{c.title || c.id}</div>
+                <div className="list-item-meta">
+                  <span>{c.department}</span>
+                  <span>•</span>
+                  <span>{(c.status || "").toUpperCase()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }

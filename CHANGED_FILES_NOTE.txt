@@ -1,0 +1,5 @@
+Deleted files (analytics removed):
+frontend/src/api/analyticsApi.js
+frontend/src/api/mock/mockAnalyticsApi.js
+frontend/src/api/real/realAnalyticsApi.js
+frontend/src/pages/AnalyticsPage.jsx

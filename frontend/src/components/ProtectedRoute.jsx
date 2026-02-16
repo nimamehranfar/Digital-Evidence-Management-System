@@ -1,33 +1,38 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute({ children, requiredRole }) {
-    const { user, loading, hasPermission } = useAuth();
+  const { user, loading, roles } = useAuth();
+  const location = useLocation();
 
-    if (loading) {
-        return (
-            <div className="loading-screen">
-                <div className="loading-spinner"></div>
-                <p>Loading...</p>
-            </div>
-        );
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div className="card">
+          <h2>Loading…</h2>
+          <p>Checking session and permissions.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (requiredRole && Array.isArray(requiredRole)) {
+    const ok = requiredRole.some((r) => roles.includes(r));
+    if (!ok) {
+      return (
+        <div className="page-container">
+          <div className="card">
+            <h2>Not authorized</h2>
+            <p>Your role does not allow access to this page.</p>
+          </div>
+        </div>
+      );
     }
+  }
 
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
-
-    if (requiredRole && !hasPermission(requiredRole)) {
-        return (
-            <div className="access-denied">
-                <div className="access-denied-content">
-                    <h1>Access Denied</h1>
-                    <p>You don't have permission to view this page.</p>
-                    <Navigate to="/dashboard" replace />
-                </div>
-            </div>
-        );
-    }
-
-    return children;
+  return children;
 }

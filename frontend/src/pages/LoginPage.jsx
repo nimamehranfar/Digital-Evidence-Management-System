@@ -1,122 +1,96 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Shield, AlertCircle } from "lucide-react";
+import { USE_MOCK } from "../api/config";
 
 export default function LoginPage() {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
-    const navigate = useNavigate();
+  const { user, login, loading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError("");
-        setLoading(true);
+  const [mockRole, setMockRole] = useState("detective");
+  const [mockDept, setMockDept] = useState("dept-1");
+  const [mockName, setMockName] = useState("Mock User");
+  const [error, setError] = useState("");
 
-        try {
-            const user = await login(username, password);
+  useEffect(() => {
+    if (user) {
+      const from = location.state?.from?.pathname || "/";
+      navigate(from, { replace: true });
+    }
+  }, [user]);
 
-            // Redirect based on role
-            if (user.role === "admin") {
-                navigate("/users");
-            } else {
-                navigate("/dashboard");
-            }
-        } catch (err) {
-            setError(err.message || "Login failed");
-        } finally {
-            setLoading(false);
-        }
-    };
+  async function onLogin() {
+    setError("");
+    try {
+      if (USE_MOCK) {
+        await login({
+          name: mockName,
+          roles: [mockRole],
+          department: mockRole === "case_officer" ? mockDept : null,
+        });
+      } else {
+        await login(); // MSAL redirect
+      }
+    } catch (e) {
+      setError(e.message || "Login failed");
+    }
+  }
 
-    return (
-        <div className="login-page">
-            <div className="login-container">
-                <div className="login-header">
-                    <Shield size={48} className="login-logo" />
-                    <h1>Digital Evidence System</h1>
-                    <p>Secure authentication required</p>
-                </div>
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <h1>Digital Evidence Management System</h1>
+        <p className="muted">
+          {USE_MOCK
+            ? "Mock mode: select a role to simulate /api/auth/me."
+            : "Sign in with Microsoft Entra ID (Workforce)."}
+        </p>
 
-                <form onSubmit={handleSubmit} className="login-form">
-                    {error && (
-                        <div className="alert alert-error">
-                            <AlertCircle size={20} />
-                            <span>{error}</span>
-                        </div>
-                    )}
+        {error ? (
+          <div className="alert alert-error" style={{ marginTop: "1rem" }}>
+            {error}
+          </div>
+        ) : null}
 
-                    <div className="form-group">
-                        <label htmlFor="username">Username</label>
-                        <input
-                            id="username"
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Enter your username"
-                            required
-                            autoFocus
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Enter your password"
-                            required
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="btn btn-primary btn-block"
-                        disabled={loading}
-                    >
-                        {loading ? "Authenticating..." : "Sign In"}
-                    </button>
-                </form>
-
-                <div className="login-footer">
-                    <div className="demo-credentials">
-                        <h3>Demo Credentials:</h3>
-
-                        <div className="credential-item">
-                            <strong>Admin (System Management):</strong> admin / admin123
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
-                            Manages users, roles, departments. NO investigative access.
-                        </div>
-
-                        <div className="credential-item">
-                            <strong>Detective (Full Access):</strong> detective / detective123
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
-                            Cross-department investigative access. Can create/edit/delete cases.
-                        </div>
-
-                        <div className="credential-item">
-                            <strong>Case Officer (Department-Limited):</strong> officer_hq / officer123
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
-                            Can investigate cases only within their department.
-                        </div>
-
-                        <div className="credential-item">
-                            <strong>Prosecutor (Read-Only):</strong> prosecutor / prosecutor123
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginLeft: '1rem', marginBottom: '0.5rem' }}>
-                            View-only access to all cases and evidence. Legal review.
-                        </div>
-                    </div>
-                </div>
+        {USE_MOCK ? (
+          <div style={{ marginTop: "1rem" }}>
+            <div className="form-group">
+              <label>Display name</label>
+              <input value={mockName} onChange={(e) => setMockName(e.target.value)} />
             </div>
-        </div>
-    );
+
+            <div className="form-group">
+              <label>Role</label>
+              <select value={mockRole} onChange={(e) => setMockRole(e.target.value)}>
+                <option value="admin">admin (governance only)</option>
+                <option value="detective">detective (full CRUD)</option>
+                <option value="case_officer">case_officer (dept scoped)</option>
+                <option value="prosecutor">prosecutor (read-only)</option>
+              </select>
+            </div>
+
+            {mockRole === "case_officer" ? (
+              <div className="form-group">
+                <label>Department (case_officer)</label>
+                <input value={mockDept} onChange={(e) => setMockDept(e.target.value)} placeholder="dept-1" />
+              </div>
+            ) : null}
+
+            <button className="btn btn-primary" onClick={onLogin} disabled={loading}>
+              Continue
+            </button>
+          </div>
+        ) : (
+          <button className="btn btn-primary" onClick={onLogin} disabled={loading} style={{ marginTop: "1rem" }}>
+            Sign in with Microsoft
+          </button>
+        )}
+
+        <p className="muted" style={{ marginTop: "1rem" }}>
+          Closed system: no self-registration. Accounts are created/invited by administrators in Entra ID.
+        </p>
+      </div>
+    </div>
+  );
 }

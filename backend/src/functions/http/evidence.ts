@@ -231,7 +231,7 @@ app.http("EvidenceList", {
 app.http("EvidenceById", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
-  route: "evidence/{evidenceId}",
+  route: "evidence/id/{evidenceId}",
   handler: evidenceById,
 });
 
@@ -245,6 +245,6 @@ app.http("EvidenceSearch", {
 app.http("EvidenceStatus", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
-  route: "evidence/{evidenceId}/status",
+  route: "evidence/id/{evidenceId}/status",
   handler: evidenceStatus,
 });

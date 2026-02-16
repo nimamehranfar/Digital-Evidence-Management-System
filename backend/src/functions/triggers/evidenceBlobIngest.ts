@@ -155,22 +155,41 @@ export async function evidenceBlobIngest(blob: Buffer, context: InvocationContex
 
     logJson(context, "evidence_blob_ingest_success", { evidenceId, ocrLines });
   } catch (e: any) {
+    const statusCode = e?.statusCode ?? e?.status ?? e?.response?.status;
+    const code = e?.code;
+    const name = e?.name;
     const msg = e?.message ? String(e.message) : "Unknown processing error";
-    context.error(msg);
+
+    // Try to extract response body if present (Search SDK often has it)
+    let respBody: string | undefined;
+    try {
+      if (e?.response?.bodyAsText) respBody = String(e.response.bodyAsText);
+      else if (e?.response?.body) respBody = JSON.stringify(e.response.body);
+    } catch {}
+
+    const detailed = [
+      msg,
+      statusCode ? `status=${statusCode}` : undefined,
+      code ? `code=${code}` : undefined,
+      name ? `name=${name}` : undefined,
+      respBody ? `response=${respBody}` : undefined,
+    ].filter(Boolean).join(" | ");
+
+    context.error(detailed);
 
     const failed: Evidence = {
       ...processing,
       status: "FAILED",
       statusUpdatedAt: new Date().toISOString(),
-      processingError: msg,
+      processingError: detailed,
     };
 
     await evidenceContainer.items.upsert(failed);
-    logJson(context, "evidence_blob_ingest_failed", { evidenceId, error: msg });
+    logJson(context, "evidence_blob_ingest_failed", { evidenceId, error: detailed });
 
-    // Let Functions runtime handle retries. For non-transient errors, operator can re-upload or fix config.
     throw e;
   }
+
 }
 
 app.storageBlob("EvidenceBlobIngest", {

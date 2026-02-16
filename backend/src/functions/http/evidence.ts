@@ -268,7 +268,9 @@ export async function evidenceSearch(req: HttpRequest, context: InvocationContex
   });
 }
 
-export async function evidenceDelete(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+// NOTE: this handler does not need to be exported. Keeping it non-exported avoids
+// accidental duplicate export errors if other modules re-export symbols.
+async function evidenceDeleteHandler(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
@@ -332,5 +334,5 @@ app.http("EvidenceDelete", {
   methods: ["DELETE", "OPTIONS"],
   authLevel: "anonymous",
   route: "evidence/id/{evidenceId}",
-  handler: evidenceDelete,
+  handler: evidenceDeleteHandler,
 });

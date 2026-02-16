@@ -35,7 +35,9 @@ export async function ocrRead(buffer: Buffer): Promise<OcrResult> {
       "Ocp-Apim-Subscription-Key": key,
       "Content-Type": "application/octet-stream",
     },
-    body: buffer,
+    // Node 18+ fetch typing is stricter than runtime support.
+    // Buffer is a Uint8Array at runtime, but TS may reject it as BodyInit.
+    body: new Uint8Array(buffer),
   });
 
   if (!analyzeResp.ok) {

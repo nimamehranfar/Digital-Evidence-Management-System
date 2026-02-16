@@ -2,6 +2,7 @@ import { app, InvocationContext } from "@azure/functions";
 import { getEnv } from "../../config/env";
 import { getContainers } from "../../lib/cosmos";
 import type { Evidence } from "../../models/types";
+import type { Case } from "../../models/types";
 import { ocrRead } from "../../lib/vision";
 import { getSearchClients, EvidenceSearchDoc } from "../../lib/search";
 import type { SearchIndexClient, SearchIndex, SearchField } from "@azure/search-documents";
@@ -79,7 +80,7 @@ export async function evidenceBlobIngest(blob: Buffer, context: InvocationContex
     return;
   }
 
-  const { evidence: evidenceContainer } = getContainers();
+  const { evidence: evidenceContainer, cases: casesContainer } = getContainers();
 
   // Load evidence record
   const q = {
@@ -93,6 +94,20 @@ export async function evidenceBlobIngest(blob: Buffer, context: InvocationContex
   if (!item) {
     context.warn(`No evidence record found for evidenceId=${evidenceId}. Skipping.`);
     return;
+  }
+
+  // Ensure department is present for downstream search filtering.
+  if (!item.department) {
+    const qc = {
+      query: "SELECT * FROM c WHERE c.id = @id",
+      parameters: [{ name: "@id", value: item.caseId }],
+    };
+    const caseRes = await casesContainer.items.query<Case>(qc).fetchAll();
+    const theCase = caseRes.resources?.[0];
+    if (theCase?.department) {
+      item.department = theCase.department;
+      await evidenceContainer.items.upsert(item);
+    }
   }
 
   if (item.status === "COMPLETED" && item.processedAt) {

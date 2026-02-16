@@ -1,12 +1,26 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { v4 as uuidv4 } from "uuid";
-import { requireAuth, requireRole } from "../../lib/auth";
+import { requireAuth } from "../../lib/auth";
+import {
+  assertDepartmentAccess,
+  getCaseOfficerDepartment,
+  requireInvestigativeDelete,
+  requireInvestigativeRead,
+  requireInvestigativeWrite,
+} from "../../lib/authz";
 import { getContainers } from "../../lib/cosmos";
 import { readJson } from "../../lib/http";
 import { CaseCreateSchema, CaseUpdateSchema, CaseNoteCreateSchema } from "../../models/schemas";
 import type { Case, CaseNote } from "../../models/types";
 import { safeHandler, handleOptions } from "./_middleware";
 import { json, problem } from "../../lib/http";
+import { cascadeDeleteCase } from "../../lib/cascadeDelete";
+
+async function ensureDepartmentExists(deptId: string): Promise<void> {
+  const { departments } = getContainers();
+  const { resource } = await departments.item(deptId, deptId).read();
+  if (!resource) throw new Error("Forbidden: department not found");
+}
 
 async function findCaseById(caseId: string): Promise<Case | null> {
   const { cases } = getContainers();
@@ -23,9 +37,21 @@ export async function casesCollection(req: HttpRequest, context: InvocationConte
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
 
+    // Investigative endpoints: admin-only users are forbidden.
+    requireInvestigativeRead(auth);
+
     if (req.method === "GET") {
       const { cases } = getContainers();
       const dept = req.query.get("department");
+
+      // Case officer is always scoped to their assigned department.
+      const officerDept = await getCaseOfficerDepartment(auth);
+      const effectiveDept = officerDept ?? dept ?? null;
+
+      if (officerDept && dept && dept !== officerDept) {
+        throw new Error("Forbidden: cross-department access denied");
+      }
+
       if (dept) {
         const q = {
           query: "SELECT * FROM c WHERE c.department = @d",
@@ -35,13 +61,25 @@ export async function casesCollection(req: HttpRequest, context: InvocationConte
         return json(200, resources);
       }
 
+      if (effectiveDept) {
+        const q = {
+          query: "SELECT * FROM c WHERE c.department = @d",
+          parameters: [{ name: "@d", value: effectiveDept }],
+        };
+        const { resources } = await cases.items.query<Case>(q, { partitionKey: effectiveDept }).fetchAll();
+        return json(200, resources);
+      }
+
       const { resources } = await cases.items.query<Case>("SELECT * FROM c").fetchAll();
       return json(200, resources);
     }
 
     if (req.method === "POST") {
-      requireRole(auth, ["admin", "detective", "case_officer"]);
+      requireInvestigativeWrite(auth);
       const body = CaseCreateSchema.parse(await readJson(req));
+
+      await ensureDepartmentExists(body.department);
+      await assertDepartmentAccess(auth, body.department);
 
       const item: Case = {
         id: body.id ?? uuidv4(),
@@ -67,6 +105,9 @@ export async function caseItem(req: HttpRequest, context: InvocationContext): Pr
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
+
+    // Investigative endpoints: admin-only users are forbidden.
+    requireInvestigativeRead(auth);
     const caseId = req.params.caseId;
     if (!caseId) return problem(400, "Missing caseId");
 
@@ -75,25 +116,31 @@ export async function caseItem(req: HttpRequest, context: InvocationContext): Pr
     if (req.method === "GET") {
       const found = await findCaseById(caseId);
       if (!found) return problem(404, "Case not found");
+
+      await assertDepartmentAccess(auth, found.department);
       return json(200, found);
     }
 
     if (req.method === "PATCH") {
-      requireRole(auth, ["admin", "detective", "case_officer"]);
+      requireInvestigativeWrite(auth);
       const patch = CaseUpdateSchema.parse(await readJson(req));
       const found = await findCaseById(caseId);
       if (!found) return problem(404, "Case not found");
+
+      await assertDepartmentAccess(auth, found.department);
       const updated: Case = { ...found, ...patch, updatedAt: new Date().toISOString() };
       await cases.items.upsert(updated);
       return json(200, updated);
     }
 
     if (req.method === "DELETE") {
-      requireRole(auth, ["admin"]);
+      requireInvestigativeDelete(auth);
       const found = await findCaseById(caseId);
       if (!found) return problem(404, "Case not found");
-      await cases.item(caseId, found.department).delete();
-      return json(200, { ok: true });
+
+      await assertDepartmentAccess(auth, found.department);
+      await cascadeDeleteCase(found.id, found.department);
+      return json(200, { ok: true, deletedCaseId: found.id });
     }
 
     return problem(405, "Method not allowed");
@@ -104,7 +151,8 @@ export async function caseNotes(req: HttpRequest, context: InvocationContext): P
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-    requireRole(auth, ["admin", "detective", "case_officer", "prosecutor"]);
+    // Notes mutate case state: prosecutor is read-only; admin has no investigative access.
+    requireInvestigativeWrite(auth);
 
     const caseId = req.params.caseId;
     if (!caseId) return problem(400, "Missing caseId");
@@ -112,6 +160,8 @@ export async function caseNotes(req: HttpRequest, context: InvocationContext): P
     const body = CaseNoteCreateSchema.parse(await readJson(req));
     const found = await findCaseById(caseId);
     if (!found) return problem(404, "Case not found");
+
+    await assertDepartmentAccess(auth, found.department);
 
     const note: CaseNote = {
       id: uuidv4(),

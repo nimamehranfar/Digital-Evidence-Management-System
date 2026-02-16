@@ -51,7 +51,10 @@ export async function requireAuth(req: HttpRequest): Promise<AuthContext> {
   });
 
   const rolesRaw = payload.roles;
-  const roles: Role[] = Array.isArray(rolesRaw) ? (rolesRaw.filter((r) => typeof r === "string") as Role[]) : [];
+  const allowed: Role[] = ["admin", "detective", "case_officer", "prosecutor"];
+  const roles: Role[] = Array.isArray(rolesRaw)
+    ? (rolesRaw.filter((r) => typeof r === "string" && allowed.includes(r as Role)) as Role[])
+    : [];
 
   return {
     oid: typeof payload.oid === "string" ? payload.oid : undefined,

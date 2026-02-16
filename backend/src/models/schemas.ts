@@ -59,3 +59,9 @@ export const UserCreateSchema = z.object({
   password: z.string().min(8),
   forceChangePasswordNextSignIn: z.boolean().optional(),
 });
+
+export const UserUpdateSchema = z.object({
+  displayName: z.string().min(1).optional(),
+  email: z.string().min(1).optional(),
+  department: z.string().min(1).optional(),
+});

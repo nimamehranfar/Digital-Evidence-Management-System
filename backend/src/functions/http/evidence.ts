@@ -1,6 +1,13 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { v4 as uuidv4 } from "uuid";
-import { requireAuth, requireRole } from "../../lib/auth";
+import { requireAuth } from "../../lib/auth";
+import {
+  assertDepartmentAccess,
+  getCaseOfficerDepartment,
+  requireInvestigativeDelete,
+  requireInvestigativeRead,
+  requireInvestigativeWrite,
+} from "../../lib/authz";
 import { getContainers } from "../../lib/cosmos";
 import { getEnv } from "../../config/env";
 import { createUploadSas, getContainerClient } from "../../lib/storage";
@@ -14,6 +21,8 @@ import type { Evidence } from "../../models/types";
 import { safeHandler, handleOptions } from "./_middleware";
 import { json, problem } from "../../lib/http";
 import { getSearchClients } from "../../lib/search";
+import { cascadeDeleteEvidence } from "../../lib/cascadeDelete";
+import type { Case } from "../../models/types";
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180);
@@ -39,14 +48,30 @@ async function findEvidenceById(evidenceId: string): Promise<Evidence | null> {
   return resources[0] ?? null;
 }
 
+async function findCaseById(caseId: string): Promise<Case | null> {
+  const { cases } = getContainers();
+  const q = {
+    query: "SELECT * FROM c WHERE c.id = @id",
+    parameters: [{ name: "@id", value: caseId }],
+  };
+  const { resources } = await cases.items.query<Case>(q).fetchAll();
+  return resources[0] ?? null;
+}
+
 export async function uploadInit(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-    requireRole(auth, ["admin", "detective", "case_officer"]);
+    // Prosecutor is read-only; admin has no investigative access.
+    requireInvestigativeWrite(auth);
 
     const env = getEnv();
     const body = EvidenceUploadInitSchema.parse(await readJson(req));
+
+    // Validate case exists and caller has access to its department.
+    const theCase = await findCaseById(body.caseId);
+    if (!theCase) return problem(404, "Case not found");
+    await assertDepartmentAccess(auth, theCase.department);
 
     const evidenceId = uuidv4();
     const safeName = sanitizeFileName(body.fileName);
@@ -57,6 +82,7 @@ export async function uploadInit(req: HttpRequest, context: InvocationContext): 
     const item: Evidence = {
       id: evidenceId,
       caseId: body.caseId,
+      department: theCase.department,
       fileName: body.fileName,
       fileType: guessFileType(body.fileName),
       fileSize: body.fileSize,
@@ -89,7 +115,7 @@ export async function uploadConfirm(req: HttpRequest, context: InvocationContext
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-    requireRole(auth, ["admin", "detective", "case_officer"]);
+    requireInvestigativeWrite(auth);
 
     const env = getEnv();
     const body = EvidenceUploadConfirmSchema.parse(await readJson(req));
@@ -97,6 +123,15 @@ export async function uploadConfirm(req: HttpRequest, context: InvocationContext
     const found = await findEvidenceById(body.evidenceId);
     if (!found) return problem(404, "Evidence not found");
     if (found.caseId !== body.caseId) return problem(400, "caseId mismatch");
+
+    if (!found.department) {
+      // Safety: backfill department from case if older items exist.
+      const theCase = await findCaseById(found.caseId);
+      if (!theCase) return problem(404, "Case not found");
+      found.department = theCase.department;
+    }
+
+    await assertDepartmentAccess(auth, found.department);
 
     // Validate blob exists
     const container = getContainerClient(env.AZURE_STORAGE_ACCOUNT_NAME, env.EVIDENCE_CONTAINER_RAW);
@@ -122,15 +157,31 @@ export async function uploadConfirm(req: HttpRequest, context: InvocationContext
 export async function evidenceList(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
-    await requireAuth(req);
+    const auth = await requireAuth(req);
+    requireInvestigativeRead(auth);
+
     const { evidence } = getContainers();
     const caseId = req.query.get("caseId");
     if (caseId) {
+      const theCase = await findCaseById(caseId);
+      if (!theCase) return problem(404, "Case not found");
+      await assertDepartmentAccess(auth, theCase.department);
+
       const q = {
         query: "SELECT * FROM c WHERE c.caseId = @c ORDER BY c.uploadedAt DESC",
         parameters: [{ name: "@c", value: caseId }],
       };
       const { resources } = await evidence.items.query<Evidence>(q, { partitionKey: caseId }).fetchAll();
+      return json(200, resources);
+    }
+
+    const officerDept = await getCaseOfficerDepartment(auth);
+    if (officerDept) {
+      const q = {
+        query: "SELECT * FROM c WHERE c.department = @d ORDER BY c.uploadedAt DESC",
+        parameters: [{ name: "@d", value: officerDept }],
+      };
+      const { resources } = await evidence.items.query<Evidence>(q).fetchAll();
       return json(200, resources);
     }
 
@@ -145,11 +196,13 @@ export async function evidenceList(req: HttpRequest, context: InvocationContext)
 export async function evidenceById(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
-    await requireAuth(req);
+    const auth = await requireAuth(req);
+    requireInvestigativeRead(auth);
     const evidenceId = req.params.evidenceId;
     if (!evidenceId) return problem(400, "Missing evidenceId");
     const found = await findEvidenceById(evidenceId);
     if (!found) return problem(404, "Evidence not found");
+    if (found.department) await assertDepartmentAccess(auth, found.department);
     return json(200, found);
   });
 }
@@ -157,11 +210,13 @@ export async function evidenceById(req: HttpRequest, context: InvocationContext)
 export async function evidenceStatus(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
-    await requireAuth(req);
+    const auth = await requireAuth(req);
+    requireInvestigativeRead(auth);
     const evidenceId = req.params.evidenceId;
     if (!evidenceId) return problem(400, "Missing evidenceId");
     const found = await findEvidenceById(evidenceId);
     if (!found) return problem(404, "Evidence not found");
+    if (found.department) await assertDepartmentAccess(auth, found.department);
     return json(200, {
       id: found.id,
       caseId: found.caseId,
@@ -176,13 +231,19 @@ export async function evidenceStatus(req: HttpRequest, context: InvocationContex
 export async function evidenceSearch(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
-    await requireAuth(req);
+    const auth = await requireAuth(req);
+    requireInvestigativeRead(auth);
 
     const q = EvidenceSearchSchema.parse(getQuery(req));
     const top = Math.min(parseInt(q.top ?? "20", 10) || 20, 100);
     const skip = Math.max(parseInt(q.skip ?? "0", 10) || 0, 0);
 
     const filters: string[] = [];
+
+    // Department scoping for case_officer.
+    const officerDept = await getCaseOfficerDepartment(auth);
+    if (officerDept) filters.push(`department eq '${officerDept.replace(/'/g, "''")}'`);
+
     if (q.caseId) filters.push(`caseId eq '${q.caseId.replace(/'/g, "''")}'`);
     if (q.status) filters.push(`status eq '${q.status.replace(/'/g, "''")}'`);
     if (q.tag) filters.push(`tags/any(t: t eq '${q.tag.replace(/'/g, "''")}')`);
@@ -204,6 +265,24 @@ export async function evidenceSearch(req: HttpRequest, context: InvocationContex
       count: result.count ?? docs.length,
       results: docs,
     });
+  });
+}
+
+export async function evidenceDelete(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  if (req.method === "OPTIONS") return handleOptions(req);
+  return safeHandler(req, context, async () => {
+    const auth = await requireAuth(req);
+    requireInvestigativeDelete(auth);
+
+    const evidenceId = req.params.evidenceId;
+    if (!evidenceId) return problem(400, "Missing evidenceId");
+    const found = await findEvidenceById(evidenceId);
+    if (!found) return problem(404, "Evidence not found");
+
+    if (found.department) await assertDepartmentAccess(auth, found.department);
+
+    await cascadeDeleteEvidence(found);
+    return json(200, { ok: true, deletedEvidenceId: found.id });
   });
 }
 
@@ -247,4 +326,11 @@ app.http("EvidenceStatus", {
   authLevel: "anonymous",
   route: "evidence/id/{evidenceId}/status",
   handler: evidenceStatus,
+});
+
+app.http("EvidenceDelete", {
+  methods: ["DELETE", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "evidence/id/{evidenceId}",
+  handler: evidenceDelete,
 });

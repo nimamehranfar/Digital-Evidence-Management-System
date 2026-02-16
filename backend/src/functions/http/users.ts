@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "../../lib/auth";
 import { safeHandler, handleOptions } from "./_middleware";
 import { json, problem, readJson } from "../../lib/http";
 import { getContainers } from "../../lib/cosmos";
-import { UserCreateSchema } from "../../models/schemas";
+import { UserCreateSchema, UserUpdateSchema } from "../../models/schemas";
 import type { UserRecord } from "../../models/types";
 
 function getGraphClient() {
@@ -43,6 +43,8 @@ export async function usersCollection(req: HttpRequest, context: InvocationConte
     }
 
     if (req.method === "POST") {
+      // This endpoint is optional. Recommended production workflow is Entra Portal invitation + App Role assignment.
+      // Keep this endpoint for completeness, but it requires GRAPH_* settings and suitable Graph permissions.
       const graph = getGraphClient();
       if (!graph) {
         return problem(
@@ -86,9 +88,49 @@ export async function usersCollection(req: HttpRequest, context: InvocationConte
   });
 }
 
+export async function usersItem(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  if (req.method === "OPTIONS") return handleOptions(req);
+  return safeHandler(req, context, async () => {
+    const auth = await requireAuth(req);
+    requireRole(auth, ["admin"]);
+
+    const oid = req.params.oid;
+    if (!oid) return problem(400, "Missing user oid");
+
+    if (req.method === "PATCH") {
+      const patch = UserUpdateSchema.parse(await readJson(req));
+
+      const { users } = getContainers();
+      const { resource } = await users.item(oid, oid).read<UserRecord>();
+      const existing = (resource ?? null) as UserRecord | null;
+
+      const updated: UserRecord = {
+        id: oid,
+        displayName: patch.displayName ?? existing?.displayName,
+        email: patch.email ?? existing?.email,
+        department: patch.department ?? existing?.department,
+        roles: existing?.roles,
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
+      };
+
+      await users.items.upsert(updated);
+      return json(200, updated);
+    }
+
+    return problem(405, "Method not allowed");
+  });
+}
+
 app.http("Users", {
   methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
   route: "users",
   handler: usersCollection,
+});
+
+app.http("UserByOid", {
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "users/{oid}",
+  handler: usersItem,
 });

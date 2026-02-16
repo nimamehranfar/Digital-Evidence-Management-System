@@ -46,7 +46,11 @@ export async function safeHandler(
     const msg = e?.message ? String(e.message) : "Unknown error";
     context.error(msg);
 
-    const status = msg.includes("Missing Authorization") ? 401 : msg.includes("Missing required role") ? 403 : 500;
+    const status =
+      msg.includes("Missing Authorization") ? 401 :
+      msg.includes("Missing required role") ? 403 :
+      msg.startsWith("Forbidden") ? 403 :
+      500;
     return withCors(req, problem(status, "Request failed", msg));
   }
 }

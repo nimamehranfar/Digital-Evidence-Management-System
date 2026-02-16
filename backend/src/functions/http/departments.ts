@@ -7,6 +7,7 @@ import { DepartmentCreateSchema, DepartmentUpdateSchema } from "../../models/sch
 import type { Department } from "../../models/types";
 import { safeHandler, handleOptions } from "./_middleware";
 import { json, problem } from "../../lib/http";
+import { cascadeDeleteDepartment } from "../../lib/cascadeDelete";
 
 export async function departmentsCollection(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
@@ -62,8 +63,9 @@ export async function departmentsItem(req: HttpRequest, context: InvocationConte
 
     if (req.method === "DELETE") {
       requireRole(auth, ["admin"]);
+      const { deletedCases, deletedEvidence } = await cascadeDeleteDepartment(deptId);
       await departments.item(deptId, deptId).delete();
-      return json(200, { ok: true });
+      return json(200, { ok: true, deletedDepartmentId: deptId, deletedCases, deletedEvidence });
     }
 
     return problem(405, "Method not allowed");

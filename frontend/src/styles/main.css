@@ -101,6 +101,19 @@ body {
     font-size: 16px;
 }
 
+/* Subtle modern background */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(1200px 600px at 10% 10%, rgba(59, 130, 246, 0.12), transparent 55%),
+      radial-gradient(1000px 500px at 90% 20%, rgba(16, 185, 129, 0.10), transparent 55%),
+      radial-gradient(900px 500px at 30% 90%, rgba(245, 158, 11, 0.08), transparent 55%);
+    z-index: -1;
+}
+
 code {
     font-family: 'Courier New', Courier, monospace;
 }
@@ -113,6 +126,39 @@ code {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+/* ==============================================
+   AUTH PAGES
+   ============================================== */
+
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: var(--spacing-xl);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 520px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    padding: calc(var(--spacing-xl) + 0.25rem);
+    backdrop-filter: blur(10px);
+}
+
+.auth-card h1 {
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+    margin-bottom: var(--spacing-sm);
+}
+
+.auth-card .muted {
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
 }
 
 .header {

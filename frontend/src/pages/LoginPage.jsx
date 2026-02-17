@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [mockDept, setMockDept] = useState("dept-1");
   const [mockName, setMockName] = useState("Mock User");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -22,6 +23,7 @@ export default function LoginPage() {
 
   async function onLogin() {
     setError("");
+    setBusy(true);
     try {
       if (USE_MOCK) {
         await login({
@@ -34,6 +36,7 @@ export default function LoginPage() {
       }
     } catch (e) {
       setError(e.message || "Login failed");
+      setBusy(false);
     }
   }
 
@@ -77,13 +80,19 @@ export default function LoginPage() {
               </div>
             ) : null}
 
-            <button className="btn btn-primary" onClick={onLogin} disabled={loading}>
+            <button className="btn btn-primary" onClick={onLogin} disabled={loading || busy}>
               Continue
             </button>
           </div>
         ) : (
-          <button className="btn btn-primary" onClick={onLogin} disabled={loading} style={{ marginTop: "1rem" }}>
-            Sign in with Microsoft
+          <button
+            className="btn btn-primary"
+            onClick={onLogin}
+            disabled={loading || busy}
+            style={{ marginTop: "1rem" }}
+            title={busy ? "Sign-in is starting..." : ""}
+          >
+            {busy ? "Starting sign-in…" : "Sign in with Microsoft"}
           </button>
         )}
 

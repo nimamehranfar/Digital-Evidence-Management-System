@@ -74,12 +74,13 @@ Real mode is the default behavior.
 
 ### Mock mode (for offline demo)
 
-Mock mode is toggled without inventing new env vars. It uses the existing `USE_MOCK` switch in `frontend/src/api/config.js`, but you can toggle it at runtime:
+**Final production behavior:** mock mode is **not** switchable via URL params or browser storage.
 
-- URL param: `?mock=1` forces mock mode  
-  Example: `http://localhost:3000/?mock=1`
-- URL param: `?mock=0` forces real mode
-- localStorage: `localStorage.setItem("USE_MOCK","true")` (or `"false"`)
+To enable mock mode for a local demo:
+
+- Edit `frontend/src/api/config.js` and change:
+  - `export const USE_MOCK = false;` → `export const USE_MOCK = true;`
+- Rebuild/redeploy.
 
 Mock mode expected outcomes:
 - Login screen shows a role dropdown (admin / detective / case_officer / prosecutor).
@@ -93,6 +94,24 @@ Mock mode expected outcomes:
   - `REACT_APP_ENTRA_CLIENT_ID`
   - `REACT_APP_ENTRA_AUTHORITY`
   - `REACT_APP_ENTRA_API_SCOPE`
+
+### How "dotenv" / env vars work for frontend deployment
+
+This frontend is **Create React App**. `REACT_APP_*` variables are **embedded into the bundle at build time**.
+
+That means your `.env` file is only for local dev; it is intentionally not committed.
+
+For Azure Static Web Apps (GitHub Actions deployment), use GitHub Secrets and inject them during the build. This repo's workflow already supports that.
+
+Required GitHub Secrets (exact names):
+
+- `REACT_APP_API_BASE_URL`
+- `REACT_APP_ENTRA_TENANT_ID`
+- `REACT_APP_ENTRA_CLIENT_ID`
+- `REACT_APP_ENTRA_AUTHORITY`
+- `REACT_APP_ENTRA_API_SCOPE`
+
+After adding/updating secrets, push a commit to trigger a redeploy so the bundle is rebuilt with the new values.
 
 Closed system rules:
 - **No self-registration UI**

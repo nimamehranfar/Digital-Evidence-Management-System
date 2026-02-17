@@ -22,6 +22,14 @@ jobs:
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
+        env:
+          # CRA (React) env vars are baked into the build output.
+          # Provide them via GitHub Secrets (Repo Settings -> Secrets and variables -> Actions).
+          REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+          REACT_APP_ENTRA_TENANT_ID: ${{ secrets.REACT_APP_ENTRA_TENANT_ID }}
+          REACT_APP_ENTRA_CLIENT_ID: ${{ secrets.REACT_APP_ENTRA_CLIENT_ID }}
+          REACT_APP_ENTRA_AUTHORITY: ${{ secrets.REACT_APP_ENTRA_AUTHORITY }}
+          REACT_APP_ENTRA_API_SCOPE: ${{ secrets.REACT_APP_ENTRA_API_SCOPE }}
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_BEACH_03107E803 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)

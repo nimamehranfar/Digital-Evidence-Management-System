@@ -31,6 +31,11 @@ const EnvSchema = z.object({
   GRAPH_CLIENT_ID: z.string().optional(),
   GRAPH_CLIENT_SECRET: z.string().optional(),
   GRAPH_TENANT_ID: z.string().optional(),
+
+  // Azure AI Speech — required only when audio evidence is uploaded.
+  // Key stored in Key Vault; see README for setup steps.
+  SPEECH_KEY: z.string().optional(),
+  SPEECH_REGION: z.string().optional(),   // e.g. "eastus"
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -41,7 +46,9 @@ export function getEnv(): Env {
   if (cached) return cached;
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
-    const msg = parsed.error.issues.map((i: { path: (string | number)[]; message: string }) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    const msg = parsed.error.issues
+      .map((i: { path: (string | number)[]; message: string }) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
     throw new Error(`Missing/invalid environment variables: ${msg}`);
   }
   cached = parsed.data;
@@ -51,5 +58,7 @@ export function getEnv(): Env {
 export function corsAllowedOrigins(): string[] {
   const { CORS_ALLOWED_ORIGINS } = getEnv();
   if (!CORS_ALLOWED_ORIGINS) return [];
-  return CORS_ALLOWED_ORIGINS.split(",").map((s: string) => s.trim()).filter(Boolean);
+  return CORS_ALLOWED_ORIGINS.split(",")
+    .map((s: string) => s.trim())
+    .filter(Boolean);
 }

@@ -5,7 +5,36 @@ const STORAGE_KEY = "mock_evidence";
 function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) return JSON.parse(raw);
-  const seed = [];
+  const seed = [
+    {
+      id: "ev-1",
+      caseId: "case-1",
+      department: "dept-1",
+      fileName: "photo_scene.jpg",
+      fileType: "image",
+      status: "COMPLETED",
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: "mock-user",
+      description: "Scene photograph",
+      tags: ["photo", "scene"],
+      userTags: ["photo", "scene"],
+      extractedText: "Sample extracted text from OCR",
+    },
+    {
+      id: "ev-2",
+      caseId: "case-1",
+      department: "dept-1",
+      fileName: "witness_statement.pdf",
+      fileType: "pdf",
+      status: "COMPLETED",
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: "mock-user",
+      description: "Witness statement document",
+      tags: ["statement", "witness"],
+      userTags: ["statement", "witness"],
+      extractedText: "The witness observed the suspect at approximately 10pm.",
+    },
+  ];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
   return seed;
 }
@@ -14,117 +43,116 @@ function save(items) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
-function now() {
-  return new Date().toISOString();
-}
-
-export async function uploadInit(payload) {
-  await mockDelay(200);
-  if (!payload?.caseId) throw new Error("caseId is required");
-  const evidenceId = `ev-${Math.random().toString(16).slice(2)}`;
+export async function uploadInit({ caseId, fileName }) {
+  await mockDelay(300);
   return {
-    evidenceId,
-    // In mock mode we don't use real SAS; caller will skip PUT
-    sasUrl: `mock://sas/${evidenceId}`,
-    blobPath: `evidence-raw/${payload.caseId}/${evidenceId}`,
+    evidenceId: `ev-${Math.random().toString(16).slice(2)}`,
+    sasUrl: `mock://blob/${caseId}/${fileName}`,
+    uploadUrl: `mock://blob/${caseId}/${fileName}`,
+    blobPath: `${caseId}/${fileName}`,
+    expiresOn: new Date(Date.now() + 15 * 60_000).toISOString(),
   };
 }
 
-export async function uploadToSasUrl(_sasUrl, _file) {
-  await mockDelay(200);
+export async function uploadToSasUrl(sasUrl, file) {
+  await mockDelay(400);
+  if (!sasUrl?.startsWith("mock://")) {
+    // Real SAS URL in mock mode — no-op
+  }
   return true;
 }
 
-export async function uploadConfirm(payload) {
-  await mockDelay(200);
+export async function uploadConfirm({ evidenceId, caseId, fileName, fileType, description, tags }) {
+  await mockDelay(300);
   const items = load();
   const item = {
-    id: payload.evidenceId,
-    caseId: payload.caseId,
-    department: payload.department || null,
-    fileName: payload.fileName,
-    fileType: payload.fileType,
-    description: payload.description || "",
-    tags: payload.tags || [],
+    id: evidenceId,
+    caseId,
+    department: "dept-1",
+    fileName: fileName || "unknown",
+    fileType: fileType || "file",
     status: "UPLOADED",
-    uploadedAt: now(),
-    uploadedBy: payload.uploadedBy || "mock-user",
-    extractedText: "",
+    uploadedAt: new Date().toISOString(),
+    uploadedBy: "mock-user",
+    description: description || "",
+    tags: tags || [],
+    userTags: tags || [],
   };
-  items.push(item);
+  items.unshift(item);
   save(items);
 
-  // Kick off mock "processing" progression
+  // Simulate async processing → COMPLETED after a short delay
   setTimeout(() => {
-    const cur = load();
-    const idx = cur.findIndex((x) => x.id === payload.evidenceId);
+    const all = load();
+    const idx = all.findIndex((e) => e.id === evidenceId);
     if (idx >= 0) {
-      cur[idx] = { ...cur[idx], status: "PROCESSING" };
-      save(cur);
+      all[idx] = { ...all[idx], status: "COMPLETED", processedAt: new Date().toISOString() };
+      save(all);
     }
-  }, 800);
-
-  setTimeout(() => {
-    const cur = load();
-    const idx = cur.findIndex((x) => x.id === payload.evidenceId);
-    if (idx >= 0) {
-      cur[idx] = { ...cur[idx], status: "COMPLETED", extractedText: "Mock OCR extracted text." };
-      save(cur);
-    }
-  }, 2500);
+  }, 1500);
 
   return item;
 }
 
 export async function getEvidence(params = {}) {
-  await mockDelay(150);
-  const items = load();
-  if (params.caseId) return items.filter((x) => x.caseId === params.caseId);
-  return items;
+  await mockDelay(200);
+  const all = load();
+  if (params.caseId) return all.filter((e) => e.caseId === params.caseId);
+  return all;
 }
 
 export async function getEvidenceById(evidenceId) {
   await mockDelay(150);
-  const item = load().find((x) => x.id === evidenceId);
-  if (!item) throw new Error("Evidence not found");
-  return item;
+  const e = load().find((x) => x.id === evidenceId);
+  if (!e) throw new Error("Evidence not found");
+  return e;
 }
 
 export async function deleteEvidence(evidenceId) {
-  await mockDelay(200);
-  const items = load().filter((x) => x.id !== evidenceId);
+  await mockDelay(250);
+  const items = load().filter((e) => e.id !== evidenceId);
   save(items);
-  return true;
+  return { ok: true, deletedEvidenceId: evidenceId };
 }
 
 export async function getEvidenceStatus(evidenceId) {
   await mockDelay(150);
-  const item = load().find((x) => x.id === evidenceId);
-  if (!item) throw new Error("Evidence not found");
-  return { id: evidenceId, status: item.status };
+  const e = load().find((x) => x.id === evidenceId);
+  if (!e) throw new Error("Evidence not found");
+  return { evidenceId: e.id, status: e.status, statusUpdatedAt: e.statusUpdatedAt ?? null };
 }
 
 export async function getEvidenceReadUrl(evidenceId) {
-  await mockDelay(120);
-  // In mock mode, just return a data URL-ish placeholder.
-  return {
-    evidenceId,
-    readUrl: `mock://read/${encodeURIComponent(evidenceId)}`,
-    expiresOn: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-  };
+  await mockDelay(200);
+  return { readUrl: `mock://blob/read/${evidenceId}`, expiresOn: new Date(Date.now() + 3600_000).toISOString() };
 }
 
 export async function searchEvidence(params = {}) {
-  await mockDelay(200);
+  await mockDelay(300);
+  const all = load();
   const q = (params.q || "").toLowerCase();
-  const items = load().filter((x) => {
-    if (params.caseId && x.caseId !== params.caseId) return false;
-    if (params.department && x.department !== params.department) return false;
-    if (params.status && x.status !== params.status) return false;
-    if (params.tag && !(x.tags || []).includes(params.tag)) return false;
-    if (!q) return true;
-    const hay = `${x.fileName} ${x.description} ${(x.tags || []).join(" ")} ${x.extractedText || ""}`.toLowerCase();
-    return hay.includes(q);
+  const results = all.filter((e) => {
+    if (params.caseId && e.caseId !== params.caseId) return false;
+    if (params.status && e.status !== params.status) return false;
+    if (params.tag && !(e.tags || []).includes(params.tag)) return false;
+    if (q) {
+      const haystack = [e.fileName, e.description, e.extractedText, ...(e.tags || [])].join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
   });
-  return items;
+  return { count: results.length, results };
+}
+
+/**
+ * Mock: update tags on an evidence record in localStorage.
+ */
+export async function updateEvidenceTags(evidenceId, tags) {
+  await mockDelay(200);
+  const items = load();
+  const idx = items.findIndex((e) => e.id === evidenceId);
+  if (idx < 0) throw new Error("Evidence not found");
+  items[idx] = { ...items[idx], userTags: tags, tags };
+  save(items);
+  return items[idx];
 }

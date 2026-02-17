@@ -1,3 +1,13 @@
+/**
+ * CaseContext.jsx
+ *
+ * CHANGED:
+ *   - Added reloadCases() — fetches only cases, not all evidence.
+ *     Used by CasesPage on mount to avoid showing stale data.
+ *   - Added deleteNote(caseId, noteId) — calls new DELETE note endpoint.
+ *   - Added updateEvidenceTags(evidenceId, tags) — calls new PATCH tags endpoint.
+ *   - Exposed all three in the context value.
+ */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthContext";
 import * as caseApi from "../api/caseApi";
@@ -13,9 +23,9 @@ export function useCase() {
 
 export function CaseProvider({ children }) {
   const { user, canAccessDepartment } = useAuth();
-  const [cases, setCases] = useState([]);
+  const [cases,    setCases]    = useState([]);
   const [evidence, setEvidence] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     if (!user) {
@@ -28,16 +38,37 @@ export function CaseProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── full reload (cases + evidence) ─────────────────────────────────────────
   async function loadData() {
     try {
       setLoading(true);
-      const [casesData, evidenceData] = await Promise.all([caseApi.getCases(), evidenceApi.getEvidence()]);
+      const [casesData, evidenceData] = await Promise.all([
+        caseApi.getCases(),
+        evidenceApi.getEvidence(),
+      ]);
       setCases(Array.isArray(casesData) ? casesData : []);
       setEvidence(Array.isArray(evidenceData) ? evidenceData : []);
     } finally {
       setLoading(false);
     }
   }
+
+  // ── cases-only reload (used by CasesPage on mount) ─────────────────────────
+  // Does NOT touch the evidence state, so evidence data isn't wiped while a
+  // CaseDetailPage is open in another tab / during fast navigation.
+  async function reloadCases() {
+    try {
+      setLoading(true);
+      const casesData = await caseApi.getCases();
+      setCases(Array.isArray(casesData) ? casesData : []);
+    } catch (_) {
+      // swallow — caller may handle
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── derived state ──────────────────────────────────────────────────────────
 
   const accessibleCases = useMemo(() => {
     if (!user) return [];
@@ -48,6 +79,8 @@ export function CaseProvider({ children }) {
   function getAccessibleCases() {
     return accessibleCases;
   }
+
+  // ── mutations ──────────────────────────────────────────────────────────────
 
   async function createCase(payload) {
     const created = await caseApi.createCase(payload);
@@ -69,36 +102,62 @@ export function CaseProvider({ children }) {
   }
 
   async function addCaseNote(caseId, text) {
-    return caseApi.addCaseNote(caseId, { text });
+    const note = await caseApi.addCaseNote(caseId, { text });
+    // Patch the local cases cache so the note appears immediately.
+    setCases((prev) =>
+      (prev || []).map((c) => {
+        if (c.id !== caseId) return c;
+        return { ...c, notes: [...(c.notes || []), note] };
+      })
+    );
+    return note;
+  }
+
+  /**
+   * Delete a single note from a case.
+   * Optimistically removes from local state then persists via API.
+   * On failure, triggers a full reload to restore correct state.
+   */
+  async function deleteNote(caseId, noteId) {
+    // Optimistic local update
+    setCases((prev) =>
+      (prev || []).map((c) => {
+        if (c.id !== caseId) return c;
+        return { ...c, notes: (c.notes || []).filter((n) => n.id !== noteId) };
+      })
+    );
+    try {
+      await caseApi.deleteNote(caseId, noteId);
+    } catch (err) {
+      // Rollback: reload the case list so the deleted note reappears.
+      await reloadCases();
+      throw err;
+    }
   }
 
   async function uploadEvidenceSas({ caseId, file, description, tags }) {
     if (!caseId) throw new Error("caseId is required");
-    if (!file) throw new Error("file is required");
+    if (!file)   throw new Error("file is required");
 
-    // 1) upload-init
     const init = await evidenceApi.uploadInit({
       caseId,
       fileName: file.name,
       fileType: file.type || "application/octet-stream",
     });
 
-    // 2) PUT to SAS URL (mock uses a mock scheme and will no-op)
     await evidenceApi.uploadToSasUrl(init.sasUrl, file);
 
-    // 3) upload-confirm
     const confirmed = await evidenceApi.uploadConfirm({
       evidenceId: init.evidenceId,
       caseId,
-      blobPath: init.blobPath,
-      fileName: file.name,
-      fileType: file.type || "application/octet-stream",
+      blobPath:  init.blobPath,
+      fileName:  file.name,
+      fileType:  file.type || "application/octet-stream",
       description: description || "",
-      tags: tags || [],
+      tags:      tags || [],
     });
 
     setEvidence((prev) => [confirmed, ...(prev || [])]);
-
     return confirmed;
   }
 
@@ -112,6 +171,18 @@ export function CaseProvider({ children }) {
     return true;
   }
 
+  /**
+   * Update the userTags array on an existing evidence record.
+   * Syncs to local state and calls the backend PATCH tags endpoint.
+   */
+  async function updateEvidenceTags(evidenceId, tags) {
+    const updated = await evidenceApi.updateEvidenceTags(evidenceId, tags);
+    setEvidence((prev) =>
+      (prev || []).map((e) => (e.id === evidenceId ? { ...e, ...updated } : e))
+    );
+    return updated;
+  }
+
   const value = {
     loading,
     cases,
@@ -121,10 +192,13 @@ export function CaseProvider({ children }) {
     updateCase,
     deleteCase,
     addCaseNote,
+    deleteNote,
     uploadEvidenceSas,
     refreshEvidenceStatus,
     deleteEvidence,
-    reload: loadData,
+    updateEvidenceTags,
+    reload:       loadData,
+    reloadCases,
   };
 
   return <CaseContext.Provider value={value}>{children}</CaseContext.Provider>;

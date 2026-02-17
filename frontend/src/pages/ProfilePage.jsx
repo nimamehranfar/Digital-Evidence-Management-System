@@ -1,29 +1,51 @@
-import { useMemo } from "react";
+/**
+ * ProfilePage.jsx
+ *
+ * Shows the current user's identity, role, and department only.
+ *
+ * CHANGED (Problem 2):
+ *   - Removed useCase() import and usage entirely.
+ *   - Removed cases.length and evidenceCount stat cards.
+ *   - Admin no longer sees misleading investigative counts.
+ *   - Profile now shows only safe identity/role/tenant info.
+ */
 import { useAuth } from "../context/AuthContext";
-import { useCase } from "../context/CaseContext";
-import { Shield, User, Building2, FileText, Briefcase, Lock } from "lucide-react";
+import { Shield, User, Lock } from "lucide-react";
 
 const ROLE_DESCRIPTIONS = {
-  admin:       "Governance only — manage departments and user role assignments.",
-  detective:   "Full operational access across all departments, cases and evidence.",
+  admin:        "Governance only — manage departments and user role assignments.",
+  detective:    "Full operational access across all departments, cases and evidence.",
   case_officer: "CRUD within assigned department only.",
-  prosecutor:  "Read-only access to all departments, cases and evidence.",
+  prosecutor:   "Read-only access to all departments, cases and evidence.",
 };
+
+function Row({ label, value, mono = false, small = false }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: ".5rem" }}>
+      <span style={{ color: "var(--color-text-secondary)", fontSize: ".8125rem", flexShrink: 0 }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: mono ? "var(--font-mono, monospace)" : undefined,
+          fontSize:   small ? ".75rem" : ".875rem",
+          textAlign:  "right",
+          wordBreak:  "break-all",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, roles, isAdmin, isDetective, isCaseOfficer, isProsecutor } = useAuth();
-  const { getAccessibleCases, evidence } = useCase();
-
-  const cases = getAccessibleCases() || [];
-  const evidenceCount = useMemo(() => {
-    const ids = new Set(cases.map((c) => c.id));
-    return (evidence || []).filter((e) => ids.has(e.caseId)).length;
-  }, [cases, evidence]);
 
   const roleLabel =
     isAdmin       ? "Admin"       :
     isDetective   ? "Detective"   :
-    isCaseOfficer ? "Case Officer":
+    isCaseOfficer ? "Case Officer" :
     isProsecutor  ? "Prosecutor"  : roles.join(", ") || "—";
 
   const roleBadge =
@@ -37,7 +59,12 @@ export default function ProfilePage() {
       <div className="page-header">
         <div>
           <h1>Profile</h1>
-          <p>Session identity from <code style={{ fontSize: ".85em", background: "var(--color-gray-100)", padding: ".1em .4em", borderRadius: 4 }}>/api/auth/me</code></p>
+          <p>
+            Session identity from{" "}
+            <code style={{ fontSize: ".85em", background: "var(--color-gray-100)", padding: ".1em .4em", borderRadius: 4 }}>
+              /api/auth/me
+            </code>
+          </p>
         </div>
       </div>
 
@@ -52,123 +79,52 @@ export default function ProfilePage() {
           <div className="card-content" style={{ display: "flex", flexDirection: "column", gap: ".875rem" }}>
             <Row label="Full Name"   value={user?.name || "—"} />
             <Row label="User ID"     value={user?.id || "—"} mono />
-            <Row label="UPN / Email" value={user?.upn || "—"} />
+            <Row label="UPN / Email" value={user?.upn || user?.username || "—"} />
             <Row label="Tenant ID"   value={user?.tenantId || "—"} mono small />
+            {user?.department && (
+              <Row label="Department"  value={user.department} />
+            )}
           </div>
         </div>
 
-        {/* Role & access */}
+        {/* Role card */}
         <div className="card">
           <div className="card-header">
             <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Shield size={18} /> Role &amp; Access
+              <Shield size={18} /> Access Level
             </h2>
           </div>
           <div className="card-content" style={{ display: "flex", flexDirection: "column", gap: ".875rem" }}>
-            <div>
-              <div className="form-label">Assigned Role</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "var(--color-text-secondary)", fontSize: ".8125rem" }}>Role</span>
               <span className={`badge ${roleBadge}`}>{roleLabel}</span>
             </div>
-            {ROLE_DESCRIPTIONS[roles[0]] && (
-              <p style={{ fontSize: ".875rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-                {ROLE_DESCRIPTIONS[roles[0]]}
-              </p>
+
+            {(roles || []).length > 0 && (
+              <div>
+                <p style={{ color: "var(--color-text-secondary)", fontSize: ".8125rem", marginBottom: ".375rem" }}>
+                  Role description
+                </p>
+                {roles.map((r) => (
+                  <p key={r} style={{ fontSize: ".875rem", marginBottom: ".25rem" }}>
+                    {ROLE_DESCRIPTIONS[r] ?? r}
+                  </p>
+                ))}
+              </div>
             )}
-            {user?.department && (
-              <Row label="Department" value={user.department} />
+
+            {isAdmin && (
+              <div
+                className="alert alert-warning"
+                style={{ marginTop: ".5rem", fontSize: ".8125rem", display: "flex", gap: ".5rem", alignItems: "flex-start" }}
+              >
+                <Lock size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>Admin role has no access to cases or evidence data.</span>
+              </div>
             )}
-            <hr style={{ border: "none", borderTop: "1px solid var(--color-border)" }} />
-            <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-              <Metric icon={<Briefcase size={16} />} label="Cases" value={cases.length} />
-              <Metric icon={<FileText  size={16} />} label="Evidence" value={evidenceCount} />
-              <Metric icon={<Building2 size={16} />} label="Department" value={user?.department || "All"} />
-            </div>
           </div>
         </div>
       </div>
-
-      {/* Permissions summary */}
-      <div className="card" style={{ marginTop: "var(--sp-xl)" }}>
-        <div className="card-header">
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Lock size={18} /> Permissions
-          </h2>
-        </div>
-        <div className="card-content">
-          <PermTable role={roles[0]} department={user?.department} />
-          <p className="muted" style={{ marginTop: "1rem", fontSize: ".8125rem" }}>
-            Closed system: account creation and role assignment are managed by administrators in the Entra ID portal, not inside the app.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value, mono, small }) {
-  return (
-    <div>
-      <div className="form-label">{label}</div>
-      <p style={{
-        fontFamily: mono ? "monospace" : undefined,
-        fontSize: small ? ".8125rem" : ".9375rem",
-        color: "var(--color-text-primary)",
-        wordBreak: "break-all",
-      }}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Metric({ icon, label, value }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: ".375rem", fontSize: ".9375rem" }}>
-      <span style={{ color: "var(--color-primary)" }}>{icon}</span>
-      <span style={{ color: "var(--color-text-secondary)" }}>{label}:</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-const PERMS = {
-  admin:       { cases: "—",   evidence: "—",   upload: "—",   departments: "✓",  users: "✓" },
-  detective:   { cases: "Full", evidence: "Full", upload: "✓",   departments: "Read", users: "—" },
-  case_officer:{ cases: "Dept", evidence: "Dept", upload: "✓",   departments: "Read", users: "—" },
-  prosecutor:  { cases: "Read", evidence: "Read", upload: "—",   departments: "Read", users: "—" },
-};
-
-function PermTable({ role }) {
-  const p = PERMS[role] || {};
-  const rows = [
-    ["Cases",       p.cases       || "—"],
-    ["Evidence",    p.evidence    || "—"],
-    ["Upload",      p.upload      || "—"],
-    ["Departments", p.departments || "—"],
-    ["Users",       p.users       || "—"],
-  ];
-  return (
-    <div className="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>Resource</th>
-            <th>Access</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([resource, access]) => (
-            <tr key={resource}>
-              <td style={{ fontWeight: 500 }}>{resource}</td>
-              <td>
-                <span className={`badge ${access === "—" ? "badge-gray" : access === "Read" ? "badge-info" : "badge-success"}`}>
-                  {access}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

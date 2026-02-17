@@ -32,19 +32,19 @@ async function findCaseById(caseId: string): Promise<Case | null> {
   return resources[0] ?? null;
 }
 
-export async function casesCollection(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function casesCollection(
+  req: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-
-    // Investigative endpoints: admin-only users are forbidden.
     requireInvestigativeRead(auth);
 
     if (req.method === "GET") {
       const { cases } = getContainers();
       const dept = req.query.get("department");
 
-      // Case officer is always scoped to their assigned department.
       const officerDept = await getCaseOfficerDepartment(auth);
       const effectiveDept = officerDept ?? dept ?? null;
 
@@ -57,7 +57,9 @@ export async function casesCollection(req: HttpRequest, context: InvocationConte
           query: "SELECT * FROM c WHERE c.department = @d",
           parameters: [{ name: "@d", value: dept }],
         };
-        const { resources } = await cases.items.query<Case>(q, { partitionKey: dept }).fetchAll();
+        const { resources } = await cases.items
+          .query<Case>(q, { partitionKey: dept })
+          .fetchAll();
         return json(200, resources);
       }
 
@@ -66,7 +68,9 @@ export async function casesCollection(req: HttpRequest, context: InvocationConte
           query: "SELECT * FROM c WHERE c.department = @d",
           parameters: [{ name: "@d", value: effectiveDept }],
         };
-        const { resources } = await cases.items.query<Case>(q, { partitionKey: effectiveDept }).fetchAll();
+        const { resources } = await cases.items
+          .query<Case>(q, { partitionKey: effectiveDept })
+          .fetchAll();
         return json(200, resources);
       }
 
@@ -101,13 +105,15 @@ export async function casesCollection(req: HttpRequest, context: InvocationConte
   });
 }
 
-export async function caseItem(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function caseItem(
+  req: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-
-    // Investigative endpoints: admin-only users are forbidden.
     requireInvestigativeRead(auth);
+
     const caseId = req.params.caseId;
     if (!caseId) return problem(400, "Missing caseId");
 
@@ -116,7 +122,6 @@ export async function caseItem(req: HttpRequest, context: InvocationContext): Pr
     if (req.method === "GET") {
       const found = await findCaseById(caseId);
       if (!found) return problem(404, "Case not found");
-
       await assertDepartmentAccess(auth, found.department);
       return json(200, found);
     }
@@ -147,11 +152,15 @@ export async function caseItem(req: HttpRequest, context: InvocationContext): Pr
   });
 }
 
-export async function caseNotes(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+// ─── POST /api/cases/{caseId}/notes ──────────────────────────────────────────
+
+export async function caseNotes(
+  req: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
     const auth = await requireAuth(req);
-    // Notes mutate case state: prosecutor is read-only; admin has no investigative access.
     requireInvestigativeWrite(auth);
 
     const caseId = req.params.caseId;
@@ -170,12 +179,62 @@ export async function caseNotes(req: HttpRequest, context: InvocationContext): P
       createdBy: auth.oid,
     };
 
-    const updated: Case = { ...found, notes: [...(found.notes ?? []), note], updatedAt: new Date().toISOString() };
+    const updated: Case = {
+      ...found,
+      notes: [...(found.notes ?? []), note],
+      updatedAt: new Date().toISOString(),
+    };
     const { cases } = getContainers();
     await cases.items.upsert(updated);
     return json(201, note);
   });
 }
+
+// ─── DELETE /api/cases/{caseId}/notes/{noteId} ───────────────────────────────
+//
+// Removes a single note from the case's embedded notes array and upserts the
+// case document back to Cosmos.  Same RBAC as note creation: detective or
+// case_officer (scoped to department).  Prosecutor is read-only and cannot
+// delete notes.
+
+async function caseNoteDelete(
+  req: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  if (req.method === "OPTIONS") return handleOptions(req);
+  return safeHandler(req, context, async () => {
+    const auth = await requireAuth(req);
+    // Same write access requirement as creating a note.
+    requireInvestigativeWrite(auth);
+
+    const caseId = req.params.caseId;
+    const noteId = req.params.noteId;
+    if (!caseId) return problem(400, "Missing caseId");
+    if (!noteId) return problem(400, "Missing noteId");
+
+    const found = await findCaseById(caseId);
+    if (!found) return problem(404, "Case not found");
+
+    await assertDepartmentAccess(auth, found.department);
+
+    const existingNotes = found.notes ?? [];
+    const noteExists = existingNotes.some((n) => n.id === noteId);
+    if (!noteExists) return problem(404, "Note not found");
+
+    const updated: Case = {
+      ...found,
+      notes: existingNotes.filter((n) => n.id !== noteId),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const { cases } = getContainers();
+    await cases.items.upsert(updated);
+
+    return json(200, { ok: true, deletedNoteId: noteId, caseId });
+  });
+}
+
+// ─── app registrations ────────────────────────────────────────────────────────
 
 app.http("Cases", {
   methods: ["GET", "POST", "OPTIONS"],
@@ -196,4 +255,11 @@ app.http("CaseNotes", {
   authLevel: "anonymous",
   route: "cases/{caseId}/notes",
   handler: caseNotes,
+});
+
+app.http("CaseNoteDelete", {
+  methods: ["DELETE", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "cases/{caseId}/notes/{noteId}",
+  handler: caseNoteDelete,
 });

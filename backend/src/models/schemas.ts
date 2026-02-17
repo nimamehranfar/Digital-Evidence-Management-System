@@ -43,6 +43,15 @@ export const EvidenceUploadConfirmSchema = z.object({
   userTags: z.array(z.string().min(1)).optional(),
 });
 
+/**
+ * PATCH /api/evidence/id/{evidenceId}/tags
+ * Allows updating the userTags array on an existing evidence record
+ * after it has been uploaded and confirmed.
+ */
+export const EvidenceTagsUpdateSchema = z.object({
+  userTags: z.array(z.string().min(1).max(64)).max(20),
+});
+
 export const EvidenceSearchSchema = z.object({
   q: z.string().optional(),
   caseId: z.string().optional(),

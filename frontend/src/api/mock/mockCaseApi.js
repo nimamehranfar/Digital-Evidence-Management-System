@@ -6,8 +6,24 @@ function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) return JSON.parse(raw);
   const seed = [
-    { id: "case-1", department: "dept-1", title: "Case 001", status: "OPEN", createdAt: new Date().toISOString() },
-    { id: "case-2", department: "dept-2", title: "Case 002", status: "OPEN", createdAt: new Date().toISOString() },
+    {
+      id: "case-1",
+      department: "dept-1",
+      title: "Case 001",
+      status: "OPEN",
+      createdAt: new Date().toISOString(),
+      notes: [
+        { id: "note-seed-1", text: "Initial investigation started.", createdAt: new Date().toISOString(), createdBy: "mock-user" },
+      ],
+    },
+    {
+      id: "case-2",
+      department: "dept-2",
+      title: "Case 002",
+      status: "OPEN",
+      createdAt: new Date().toISOString(),
+      notes: [],
+    },
   ];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
   return seed;
@@ -38,7 +54,9 @@ export async function createCase(payload) {
     department: payload.department,
     title: payload?.title || "Untitled Case",
     status: payload?.status || "OPEN",
+    description: payload?.description,
     createdAt: new Date().toISOString(),
+    notes: [],
   };
   items.push(created);
   save(items);
@@ -64,10 +82,35 @@ export async function deleteCase(caseId) {
 
 export async function addCaseNote(caseId, payload) {
   await mockDelay(200);
-  return {
+  const items = load();
+  const idx = items.findIndex((x) => x.id === caseId);
+  const note = {
     id: `note-${Math.random().toString(16).slice(2)}`,
-    caseId,
     text: payload?.text || "",
     createdAt: new Date().toISOString(),
+    createdBy: "mock-user",
   };
+  if (idx >= 0) {
+    items[idx] = { ...items[idx], notes: [...(items[idx].notes || []), note] };
+    save(items);
+  }
+  return note;
+}
+
+/**
+ * Mock: remove a note from the case's notes array in localStorage.
+ */
+export async function deleteNote(caseId, noteId) {
+  await mockDelay(200);
+  const items = load();
+  const idx = items.findIndex((x) => x.id === caseId);
+  if (idx < 0) throw new Error("Case not found");
+  const before = items[idx].notes || [];
+  if (!before.some((n) => n.id === noteId)) throw new Error("Note not found");
+  items[idx] = {
+    ...items[idx],
+    notes: before.filter((n) => n.id !== noteId),
+  };
+  save(items);
+  return { ok: true, deletedNoteId: noteId, caseId };
 }

@@ -29,3 +29,14 @@ export async function addCaseNote(caseId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * DELETE /api/cases/{caseId}/notes/{noteId}
+ * Removes a note from the case document in Cosmos.
+ */
+export async function deleteNote(caseId, noteId) {
+  return apiFetch(
+    `/api/cases/${encodeURIComponent(caseId)}/notes/${encodeURIComponent(noteId)}`,
+    { method: "DELETE" }
+  );
+}

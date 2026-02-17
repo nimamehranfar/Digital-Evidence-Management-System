@@ -15,9 +15,7 @@ export async function uploadInit(payload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
-
   // Backend returns `uploadUrl` (SAS) but older frontend code expects `sasUrl`.
-  // Normalize to avoid accidental fetch("undefined") → /undefined on the static site.
   if (res && !res.sasUrl && res.uploadUrl) {
     return { ...res, sasUrl: res.uploadUrl };
   }
@@ -33,7 +31,6 @@ export async function uploadToSasUrl(sasUrl, file) {
     },
     body: file,
   });
-
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText);
     const err = new Error(text || response.statusText);
@@ -75,11 +72,23 @@ export async function getEvidenceReadUrl(evidenceId) {
 
 export async function searchEvidence(params = {}) {
   const qs = new URLSearchParams();
-  if (params.q) qs.set("q", params.q);
-  if (params.caseId) qs.set("caseId", params.caseId);
+  if (params.q)          qs.set("q",          params.q);
+  if (params.caseId)     qs.set("caseId",     params.caseId);
   if (params.department) qs.set("department", params.department);
-  if (params.status) qs.set("status", params.status);
-  if (params.tag) qs.set("tag", params.tag);
+  if (params.status)     qs.set("status",     params.status);
+  if (params.tag)        qs.set("tag",        params.tag);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiFetch(`/api/evidence/search${suffix}`, { method: "GET" });
+}
+
+/**
+ * PATCH /api/evidence/id/{evidenceId}/tags
+ * @param {string}   evidenceId
+ * @param {string[]} tags  - full replacement list of userTags
+ */
+export async function updateEvidenceTags(evidenceId, tags) {
+  return apiFetch(`/api/evidence/id/${encodeURIComponent(evidenceId)}/tags`, {
+    method: "PATCH",
+    body: JSON.stringify({ userTags: tags }),
+  });
 }

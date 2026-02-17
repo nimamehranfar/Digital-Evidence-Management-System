@@ -9,15 +9,25 @@ import { useAuth } from "../context/AuthContext";
 
 const STATUS_META = {
   OPEN:       { label: "Open",       className: "badge-info" },
+  ON_HOLD:    { label: "On hold",    className: "badge-warning" },
   CLOSED:     { label: "Closed",     className: "badge-gray" },
-  PENDING:    { label: "Pending",    className: "badge-warning" },
-  ACTIVE:     { label: "Active",     className: "badge-primary" },
+  // legacy
+  PENDING:    { label: "On hold",    className: "badge-warning" },
+  ACTIVE:     { label: "Open",       className: "badge-info" },
   COMPLETED:  { label: "Completed",  className: "badge-success" },
   FAILED:     { label: "Failed",     className: "badge-danger" },
 };
 
+function normalizeCaseStatus(s) {
+  const u = String(s || "").toUpperCase();
+  if (u === "ACTIVE") return "OPEN";
+  if (u === "PENDING") return "ON_HOLD";
+  if (u === "ONHOLD" || u === "ON-HOLD") return "ON_HOLD";
+  return u || "OPEN";
+}
+
 function CaseStatus({ status }) {
-  const s = (status || "OPEN").toUpperCase();
+  const s = normalizeCaseStatus(status);
   const meta = STATUS_META[s] || { label: s, className: "badge-gray" };
   return <span className={`badge ${meta.className}`}>{meta.label}</span>;
 }
@@ -46,8 +56,8 @@ export default function DashboardPage() {
   const { getAccessibleCases, evidence } = useCase();
 
   const cases = getAccessibleCases() || [];
-  const openCases  = cases.filter((c) => ["OPEN","ACTIVE","PENDING"].includes((c.status||"").toUpperCase()));
-  const closedCases = cases.filter((c) => !["OPEN","ACTIVE","PENDING"].includes((c.status||"").toUpperCase()));
+  const openCases  = cases.filter((c) => normalizeCaseStatus(c.status) !== "CLOSED");
+  const closedCases = cases.filter((c) => normalizeCaseStatus(c.status) === "CLOSED");
 
   const accessIds = new Set(cases.map((c) => c.id));
   const recentEvidence = (evidence || [])

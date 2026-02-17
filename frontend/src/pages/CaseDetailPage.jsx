@@ -9,6 +9,14 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+function normalizeCaseStatus(s) {
+  const u = String(s || "").toUpperCase();
+  if (u === "ACTIVE") return "OPEN";
+  if (u === "PENDING") return "ON_HOLD";
+  if (u === "ONHOLD" || u === "ON-HOLD") return "ON_HOLD";
+  return u || "OPEN";
+}
+
 const STATUS_CHIP_MAP = {
   COMPLETED:  "status-chip-completed",
   PROCESSING: "status-chip-processing",
@@ -49,11 +57,11 @@ export default function CaseDetailPage() {
     if (local) {
       setCaseItem(local);
       setTitle(local.title || "");
-      setStatus(local.status || "OPEN");
+      setStatus(normalizeCaseStatus(local.status));
       return;
     }
     caseApi.getCase(caseId)
-      .then((c) => { setCaseItem(c); setTitle(c.title || ""); setStatus(c.status || "OPEN"); })
+      .then((c) => { setCaseItem(c); setTitle(c.title || ""); setStatus(normalizeCaseStatus(c.status)); })
       .catch((e) => setPageError(e.message || "Could not load case"));
   }, [caseId, cases]);
 
@@ -177,8 +185,7 @@ export default function CaseDetailPage() {
                 disabled={!canCreateOrEditCases()}
               >
                 <option value="OPEN">Open</option>
-                <option value="ACTIVE">Active</option>
-                <option value="PENDING">Pending</option>
+                <option value="ON_HOLD">On hold</option>
                 <option value="CLOSED">Closed</option>
               </select>
             </div>

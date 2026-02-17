@@ -98,8 +98,12 @@ export default function UploadPage() {
         fileType: file.type || "application/octet-stream",
         fileSize: file.size,
       });
+      const sasUrl = init?.sasUrl || init?.uploadUrl;
+      if (!sasUrl) {
+        throw new Error("Upload-init did not return a SAS URL (expected uploadUrl/sasUrl)");
+      }
       setProgress(30);
-      await evidenceApi.uploadToSasUrl(init.sasUrl, file, (pct) => {
+      await evidenceApi.uploadToSasUrl(sasUrl, file, (pct) => {
         setProgress(30 + Math.round(pct * 0.5));
       });
       setProgress(80);

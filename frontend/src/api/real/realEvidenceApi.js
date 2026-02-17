@@ -11,10 +11,17 @@ import { apiFetch } from "./apiClient";
  */
 
 export async function uploadInit(payload) {
-  return apiFetch("/api/evidence/upload-init", {
+  const res = await apiFetch("/api/evidence/upload-init", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+  // Backend returns `uploadUrl` (SAS) but older frontend code expects `sasUrl`.
+  // Normalize to avoid accidental fetch("undefined") → /undefined on the static site.
+  if (res && !res.sasUrl && res.uploadUrl) {
+    return { ...res, sasUrl: res.uploadUrl };
+  }
+  return res;
 }
 
 export async function uploadToSasUrl(sasUrl, file) {

@@ -7,12 +7,25 @@ import { Plus, Search, Briefcase, Trash2, RefreshCw, X } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect } from "react";
 
+// Backend contract (Zod enum): OPEN | CLOSED | ON_HOLD
+// Keep legacy mappings so older stored data (ACTIVE/PENDING) still renders.
 const STATUS_BADGE = {
-  OPEN:    "badge-info",
-  ACTIVE:  "badge-primary",
-  PENDING: "badge-warning",
-  CLOSED:  "badge-gray",
+  OPEN:     "badge-info",
+  ON_HOLD:  "badge-warning",
+  CLOSED:   "badge-gray",
+
+  // legacy
+  ACTIVE:   "badge-info",
+  PENDING:  "badge-warning",
 };
+
+function normalizeCaseStatus(s) {
+  const u = String(s || "").toUpperCase();
+  if (u === "ACTIVE") return "OPEN";
+  if (u === "PENDING") return "ON_HOLD";
+  if (u === "ONHOLD" || u === "ON-HOLD") return "ON_HOLD";
+  return u;
+}
 
 export default function CasesPage() {
   const { canCreateOrEditCases, canDeleteCases } = useAuth();
@@ -38,7 +51,7 @@ export default function CasesPage() {
     return cases.filter((c) => {
       const titleMatch = !query || (c.title || "").toLowerCase().includes(query.toLowerCase());
       const deptMatch  = !deptFilter   || c.department === deptFilter;
-      const statMatch  = !statusFilter || (c.status || "").toUpperCase() === statusFilter;
+      const statMatch  = !statusFilter || normalizeCaseStatus(c.status) === statusFilter;
       return titleMatch && deptMatch && statMatch;
     });
   }, [cases, query, deptFilter, statusFilter]);
@@ -112,8 +125,7 @@ export default function CasesPage() {
           <select className="form-select" style={{ flex: "1 1 140px" }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
             <option value="OPEN">Open</option>
-            <option value="ACTIVE">Active</option>
-            <option value="PENDING">Pending</option>
+            <option value="ON_HOLD">On hold</option>
             <option value="CLOSED">Closed</option>
           </select>
         </div>
@@ -152,8 +164,8 @@ export default function CasesPage() {
                 </td>
                 <td>{c.department || "—"}</td>
                 <td>
-                  <span className={`badge ${STATUS_BADGE[(c.status||"OPEN").toUpperCase()] || "badge-gray"}`}>
-                    {c.status || "OPEN"}
+                  <span className={`badge ${STATUS_BADGE[normalizeCaseStatus(c.status) || "OPEN"] || "badge-gray"}`}>
+                    {normalizeCaseStatus(c.status) || "OPEN"}
                   </span>
                 </td>
                 <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
@@ -198,8 +210,8 @@ export default function CasesPage() {
                   <label className="form-label">Initial Status</label>
                   <select className="form-select" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
                     <option value="OPEN">Open</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="PENDING">Pending</option>
+                    <option value="ON_HOLD">On hold</option>
+                    <option value="CLOSED">Closed</option>
                   </select>
                 </div>
                 <div className="form-group">

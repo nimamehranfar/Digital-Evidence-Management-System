@@ -1,212 +1,112 @@
-# Digital Evidence Management System — Frontend
+# Digital Evidence Management System — Frontend (Part 5)
 
-This is the React frontend for the Digital Evidence Management System (DEMS).
-
-- **Real mode**: Microsoft Entra ID (Workforce) via **MSAL redirect** + backend behind **APIM**.
-- **Mock mode**: local in-browser mocks with the **same request/response contracts** as real mode.
-
-The backend is Azure Functions (Node.js + TypeScript) behind APIM:
-
-- Base URL: `https://apim-dems1.azure-api.net/func-dems1`
+React 19 + CRA app deployed to Azure Static Web Apps (SWA).  
+Auth: Microsoft Entra ID (Workforce) via MSAL redirect (`@azure/msal-browser`).  
+Backend: Azure Functions behind APIM.
 
 ---
 
-## 1) Requirements
+## 1. Environment variables
 
-- Node.js 18+ recommended
-- npm
+Embed at **build time** (CRA bakes them in at `npm run build`).  
+For SWA GitHub Actions, add these as **GitHub Secrets** and inject them in the build step:
 
----
+| Secret name                 | Example value                                              |
+|-----------------------------|------------------------------------------------------------|
+| `REACT_APP_API_BASE_URL`    | `https://apim-dems1.azure-api.net/func-dems1`              |
+| `REACT_APP_ENTRA_TENANT_ID` | `2b14e728-abf9-4076-8465-8c1520df0e48`                    |
+| `REACT_APP_ENTRA_CLIENT_ID` | `f5697764-8b86-4cb8-beda-3f986ee268f5`                    |
+| `REACT_APP_ENTRA_AUTHORITY` | `https://login.microsoftonline.com/<tenantId>`             |
+| `REACT_APP_ENTRA_API_SCOPE` | `api://5c696d12-ced1-409f-bde9-5806053165b3/access_as_user`|
 
-## 2) Environment variables (REAL mode)
-
-Create `frontend/.env` with the exact keys below (these already exist in this repo’s `frontend/.env`):
-
-```env
-REACT_APP_API_BASE_URL=https://apim-dems1.azure-api.net/func-dems1
-REACT_APP_ENTRA_TENANT_ID=2b14e728-abf9-4076-8465-8c1520df0e48
-REACT_APP_ENTRA_CLIENT_ID=f5697764-8b86-4cb8-beda-3f986ee268f5
-REACT_APP_ENTRA_AUTHORITY=https://login.microsoftonline.com/2b14e728-abf9-4076-8465-8c1520df0e48
-REACT_APP_ENTRA_API_SCOPE=api://5c696d12-ced1-409f-bde9-5806053165b3/access_as_user
-```
-
-**Notes**
-- `REACT_APP_API_BASE_URL` must point to the APIM front door (no extra `/api` in this value).
-- `REACT_APP_ENTRA_API_SCOPE` is the scope used when acquiring an access token for the Functions API.
+> If any env var is missing at build time, MSAL will throw on first use. Always verify secrets are present in the GitHub Actions log before debugging auth.
 
 ---
 
-## 3) Run commands
-
-### Install
+## 2. Run locally
 
 ```bash
 cd frontend
 npm install
-```
-
-### Start (dev)
-
-```bash
+# Create .env for local dev (not committed)
+cp .env.example .env   # then fill in real values
 npm start
 ```
 
-### Build
+---
 
-```bash
-npm run build
+## 3. Mock mode (offline demo)
+
+Edit `frontend/src/api/config.js`:
+
+```js
+export const USE_MOCK = true;   // default: false
 ```
 
-Expected outcomes:
-- `npm run build` completes with no errors.
-- Browser opens at `http://localhost:3000` (dev).
+Then `npm start`. A role picker appears on the login page. No Entra ID or APIM required.
 
 ---
 
-## 4) Mock mode vs Real mode
+## 4. Authentication flow (real mode)
 
-### Real mode (default)
+```
+User clicks "Sign in with Microsoft"
+   → MSAL loginRedirect()
+   → Microsoft-hosted login UI
+   → redirect back to window.location.origin
+   → index.js bootstrap:
+       msalInstance.initialize()
+       clearMsalInteractionLocks()      ← clears any stale state
+       msalInstance.handleRedirectPromise()  ← processes hash, stores tokens
+       msalInstance.setActiveAccount()
+   → React renders App
+   → AuthContext useEffect:
+       msalInstance.getAllAccounts() > 0 → true
+       acquireTokenSilent() → Bearer token
+       GET /api/auth/me → { id, name, roles, department? }
+   → user set in state → ProtectedRoute passes → dashboard renders
+```
 
-Real mode is the default behavior.
+### Token refresh / interaction_required
 
-- Login uses **Microsoft-hosted** Entra ID login page (MSAL redirect).
-- After login, the frontend calls `GET /api/auth/me` and drives UI permissions from the response.
+If `acquireTokenSilent` throws `InteractionRequiredAuthError`:
+- `acquireToken()` in `msalInstance.js` calls `acquireTokenRedirect()`
+- The browser goes to Microsoft with the existing SSO session
+- Microsoft mints a fresh token and returns to the app
+- The user sees a brief redirect — no full re-login needed
 
-### Mock mode (for offline demo)
+### Redirect-back-to-intended-page
 
-**Final production behavior:** mock mode is **not** switchable via URL params or browser storage.
-
-To enable mock mode for a local demo:
-
-- Edit `frontend/src/api/config.js` and change:
-  - `export const USE_MOCK = false;` → `export const USE_MOCK = true;`
-- Rebuild/redeploy.
-
-Mock mode expected outcomes:
-- Login screen shows a role dropdown (admin / detective / case_officer / prosecutor).
-- All pages work without Azure, using mocks that match real API contracts.
-
----
-
-## 5) Authentication (MSAL redirect)
-
-- Sign-in is handled by MSAL redirect using:
-  - `REACT_APP_ENTRA_CLIENT_ID`
-  - `REACT_APP_ENTRA_AUTHORITY`
-  - `REACT_APP_ENTRA_API_SCOPE`
-
-### How "dotenv" / env vars work for frontend deployment
-
-This frontend is **Create React App**. `REACT_APP_*` variables are **embedded into the bundle at build time**.
-
-That means your `.env` file is only for local dev; it is intentionally not committed.
-
-For Azure Static Web Apps (GitHub Actions deployment), use GitHub Secrets and inject them during the build. This repo's workflow already supports that.
-
-Required GitHub Secrets (exact names):
-
-- `REACT_APP_API_BASE_URL`
-- `REACT_APP_ENTRA_TENANT_ID`
-- `REACT_APP_ENTRA_CLIENT_ID`
-- `REACT_APP_ENTRA_AUTHORITY`
-- `REACT_APP_ENTRA_API_SCOPE`
-
-After adding/updating secrets, push a commit to trigger a redeploy so the bundle is rebuilt with the new values.
-
-Closed system rules:
-- **No self-registration UI**
-- Users are **created/invited by admins in Entra ID portal**
-- Role assignment happens in the portal (app roles), not in the frontend
+- `ProtectedRoute` passes `{ state: { from: location } }` when redirecting to `/login`
+- `LoginPage` reads `location.state.from`
+- After `user` is set, `useEffect` in `LoginPage` navigates to `from` (or role default)
 
 ---
 
-## 6) RBAC rules enforced in the UI (and backed by the API)
+## 5. RBAC
 
-### Roles
-
-- **admin**: governance only (Departments + Users). **No access** to cases/evidence/search.
-- **detective**: full CRUD across all departments/cases/evidence.
-- **case_officer**: CRUD only within their assigned department.
-- **prosecutor**: read-only across all departments/cases/evidence.
-
-### UI expectations by role
-
-- **admin**
-  - Can open: `/departments`, `/users`, `/profile`
-  - Cannot open: `/dashboard`, `/cases`, `/upload`, `/search`
-- **prosecutor**
-  - Read-only: buttons for create/edit/delete/upload are hidden/disabled
-- **case_officer**
-  - Department-scoped: UI and backend prevent cross-department access
+| Role          | Can see                              | Cannot see                    |
+|---------------|--------------------------------------|-------------------------------|
+| `admin`       | `/departments`, `/users`, `/profile` | Dashboard, cases, evidence    |
+| `detective`   | Everything investigative             | `/users`                      |
+| `case_officer`| Department-scoped investigative      | Other departments, `/users`   |
+| `prosecutor`  | Read-only investigative              | Upload, edit, delete, `/users`|
 
 ---
 
-## 7) Evidence upload flow (SAS-based)
+## 6. API routes
 
-Upload sequence used by the frontend:
-
-1. `POST /api/evidence/upload-init`
-2. `PUT` file bytes directly to the returned **Blob SAS URL**
-3. `POST /api/evidence/upload-confirm`
-4. Poll: `GET /api/evidence/id/{evidenceId}/status` until `COMPLETED` or `FAILED`
-
-This matches the backend design:
-- Blob-trigger processing
-- Search indexing
-- Status transitions
+See `docs/FRONTEND_GUIDE.md` for the complete contract.
 
 ---
 
-## 8) Common issues & meaning
+## 7. Common issues
 
-### 401 Unauthorized
-- Not logged in (missing/expired token), or token acquisition failed.
-
-### 403 Forbidden
-- Role not allowed (RBAC). The UI prevents access, but direct navigation may still hit 403 from the API.
-
-### CORS
-- If APIM/Functions CORS is misconfigured, calls from `localhost:3000` will fail.
-  (Backend/Azure CORS is expected to be handled in Part 3.)
-
----
-
-## 9) Frontend API routes implemented (final contract)
-
-Auth:
-- `GET /api/auth/me`
-
-Departments:
-- `GET /api/departments`
-- `POST /api/departments` (**admin**)
-- `PATCH /api/departments/{id}` (**admin**)
-- `DELETE /api/departments/{id}` (**admin**, cascade)
-
-Cases:
-- `GET /api/cases`
-- `POST /api/cases`
-- `GET /api/cases/{caseId}`
-- `PATCH /api/cases/{caseId}`
-- `DELETE /api/cases/{caseId}`
-- `POST /api/cases/{caseId}/notes`
-
-Evidence:
-- `POST /api/evidence/upload-init`
-- `POST /api/evidence/upload-confirm`
-- `GET /api/evidence`
-- `GET /api/evidence/id/{evidenceId}`
-- `DELETE /api/evidence/id/{evidenceId}`
-- `GET /api/evidence/id/{evidenceId}/status`
-- `GET /api/evidence/search`
-
-Users (**admin**):
-- `GET /api/users`
-- `PATCH /api/users/{oid}` (assign/update case_officer department)
-
----
-
-## 10) What was intentionally removed
-
-- Analytics UI and any analytics API usage (not used in this project)
-- Any registration / sign-up flows (closed system)
-- Any in-app “Create user” flows (handled in Entra ID portal)
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Blank page after redirect | `navigateToLoginRequestUrl: true` was set | Part 5 sets it to `false` |
+| `interaction_in_progress` | Stale sessionStorage lock | `clearMsalInteractionLocks()` runs before `handleRedirectPromise` |
+| `/api/auth/me` returns 401 | Wrong `REACT_APP_ENTRA_API_SCOPE` | Verify scope matches `dems-api` app registration |
+| `/api/auth/me` returns 403 | No app role assigned | Admin must assign role in Entra portal → user must re-login |
+| "Failed to fetch" | APIM CORS not configured for SWA origin | Backend/APIM fix required (Part 3 scope) |
+| App stuck on loading spinner | MSAL `handleRedirectPromise` never resolves | Usually means `initialize()` was not awaited — fixed in Part 5 bootstrap |

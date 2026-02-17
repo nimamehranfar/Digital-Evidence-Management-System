@@ -1,141 +1,232 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { USE_MOCK } from "../api/config";
-import { msalInstance } from "../auth/msalInstance";
+import { Shield, AlertCircle, RefreshCw, LogOut, Loader } from "lucide-react";
 
 export default function LoginPage() {
-  const { user, login, logout, loading, authError } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
+  const { user, loading, authError, login, logout, retryAuth, isAdmin } = useAuth();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const [signing, setSigning]   = useState(false);
   const [mockRole, setMockRole] = useState("detective");
-  const [mockDept, setMockDept] = useState("dept-1");
-  const [mockName, setMockName] = useState("Mock User");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [mockDept, setMockDept] = useState("Homicide");
 
-  const hasCachedMsalAccount = !USE_MOCK && msalInstance.getAllAccounts().length > 0;
+  // Where to go after a successful login
+  const from = location.state?.from;
+  const intendedPath =
+    from && from.pathname && from.pathname !== "/login"
+      ? from
+      : null;
 
+  // --------------------------------------------------------------------------
+  // If the user is already logged in, send them to the right place immediately
+  // --------------------------------------------------------------------------
   useEffect(() => {
-    if (user) {
-      const from = location.state?.from?.pathname || "/";
-      navigate(from, { replace: true });
+    if (!loading && user) {
+      if (intendedPath) {
+        navigate(intendedPath, { replace: true });
+      } else if (isAdmin) {
+        navigate("/departments", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     }
-  }, [user]);
+  }, [user, loading, isAdmin, navigate, intendedPath]);
 
-  // If we have a cached MSAL account but /api/auth/me failed, show the reason.
-  useEffect(() => {
-    if (!user && authError) setError(authError);
-  }, [authError]);
-
-  async function onLogin() {
-    setError("");
-    setBusy(true);
+  // --------------------------------------------------------------------------
+  // Handlers
+  // --------------------------------------------------------------------------
+  async function handleLogin() {
+    if (signing) return;
+    setSigning(true);
     try {
       if (USE_MOCK) {
+        // mockAuthApi.login expects { name, roles: string[], department }
         await login({
-          name: mockName,
+          name: mockRole.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()) + " (Demo)",
           roles: [mockRole],
-          department: mockRole === "case_officer" ? mockDept : null,
+          department: mockRole === "case_officer" ? mockDept : undefined,
         });
+        // AuthContext sets user → useEffect above will navigate
       } else {
-        await login(); // MSAL redirect
+        await login(); // triggers MSAL redirect — this page navigates away
       }
     } catch (e) {
-      setError(e.message || "Login failed");
-      setBusy(false);
+      setSigning(false);
     }
   }
 
-  async function onLogoutAndRetry() {
-    setError("");
-    setBusy(true);
-    try {
-      await logout();
-    } finally {
-      setBusy(false);
-    }
+  async function handleLogout() {
+    try { await logout(); } catch (_) {}
+  }
+
+  async function handleRetry() {
+    setSigning(false);
+    retryAuth();
+  }
+
+  // --------------------------------------------------------------------------
+  // Determine what to show
+  // --------------------------------------------------------------------------
+  // MSAL account exists but /api/auth/me failed
+  const hasError = Boolean(authError);
+
+  // True while MSAL redirect is in flight (page will navigate away soon)
+  const redirectInFlight = signing && !USE_MOCK;
+
+  // --------------------------------------------------------------------------
+  // Render
+  // --------------------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="login-page">
+        <div className="login-container">
+          <div className="login-header">
+            <div className="login-logo"><Shield size={48} /></div>
+            <h1>Digital Evidence System</h1>
+          </div>
+          <div style={{ textAlign: "center", padding: "2rem" }}>
+            <Loader size={32} className="spinner" style={{ color: "var(--color-primary)" }} />
+            <p style={{ marginTop: "1rem", color: "var(--color-text-secondary)" }}>
+              Checking session…
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>Digital Evidence Management System</h1>
-        <p className="muted">
-          {USE_MOCK
-            ? "Mock mode: select a role to simulate /api/auth/me."
-            : "Sign in with Microsoft Entra ID (Workforce)."}
-        </p>
-
-        {error ? (
-          <div className="alert alert-error" style={{ marginTop: "1rem" }}>
-            {error}
+    <div className="login-page">
+      <div className="login-container">
+        {/* Header */}
+        <div className="login-header">
+          <div className="login-logo">
+            <Shield size={48} />
           </div>
-        ) : null}
+          <h1>Digital Evidence System</h1>
+          <p className="login-subtitle">
+            {USE_MOCK ? "Demo mode — select a role to continue" : "Secure access — authorised personnel only"}
+          </p>
+        </div>
 
-        {!USE_MOCK && hasCachedMsalAccount && !user ? (
-          <div className="alert" style={{ marginTop: "1rem" }}>
-            <strong>Microsoft sign-in detected</strong>
-            <div className="muted" style={{ marginTop: ".5rem" }}>
-              You have a cached Microsoft account, but the app could not load <code>/api/auth/me</code>.
-              This usually means the API token could not be minted for the correct tenant/scope, or the backend rejected it.
-            </div>
-            <div style={{ display: "flex", gap: ".5rem", marginTop: "1rem", flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={onLogin} disabled={loading || busy}>
-                Try sign-in again
-              </button>
-              <button className="btn" onClick={onLogoutAndRetry} disabled={loading || busy}>
-                Sign out
-              </button>
+        {/* Error state */}
+        {hasError && (
+          <div className="auth-error-box">
+            <AlertCircle size={20} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <p className="auth-error-title">Sign-in issue</p>
+              <p className="auth-error-body">{authError}</p>
             </div>
           </div>
-        ) : null}
-
-        {USE_MOCK ? (
-          <div style={{ marginTop: "1rem" }}>
-            <div className="form-group">
-              <label>Display name</label>
-              <input value={mockName} onChange={(e) => setMockName(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label>Role</label>
-              <select value={mockRole} onChange={(e) => setMockRole(e.target.value)}>
-                <option value="admin">admin (governance only)</option>
-                <option value="detective">detective (full CRUD)</option>
-                <option value="case_officer">case_officer (dept scoped)</option>
-                <option value="prosecutor">prosecutor (read-only)</option>
-              </select>
-            </div>
-
-            {mockRole === "case_officer" ? (
-              <div className="form-group">
-                <label>Department (case_officer)</label>
-                <input value={mockDept} onChange={(e) => setMockDept(e.target.value)} placeholder="dept-1" />
-              </div>
-            ) : null}
-
-            <button className="btn btn-primary" onClick={onLogin} disabled={loading || busy}>
-              Continue
-            </button>
-          </div>
-        ) : (
-          <button
-            className="btn btn-primary"
-            onClick={onLogin}
-            disabled={loading || busy}
-            style={{ marginTop: "1rem" }}
-            title={busy ? "Sign-in is starting..." : ""}
-          >
-            {busy ? "Starting sign-in…" : "Sign in with Microsoft"}
-          </button>
         )}
 
-        <p className="muted" style={{ marginTop: "1rem" }}>
-          Closed system: no self-registration. Accounts are created/invited by administrators in Entra ID.
+        {/* Redirect in flight */}
+        {redirectInFlight && (
+          <div className="auth-info-box">
+            <Loader size={20} className="spinner" style={{ flexShrink: 0 }} />
+            <p>Redirecting to Microsoft sign-in…</p>
+          </div>
+        )}
+
+        {/* Mock role picker */}
+        {USE_MOCK && !redirectInFlight && (
+          <div className="mock-picker">
+            <label className="form-label">Role</label>
+            <select
+              className="form-select"
+              value={mockRole}
+              onChange={(e) => setMockRole(e.target.value)}
+            >
+              <option value="detective">Detective (full access)</option>
+              <option value="case_officer">Case Officer (department-scoped)</option>
+              <option value="prosecutor">Prosecutor (read-only)</option>
+              <option value="admin">Admin (governance only)</option>
+            </select>
+
+            {mockRole === "case_officer" && (
+              <>
+                <label className="form-label" style={{ marginTop: "0.75rem" }}>Department</label>
+                <select
+                  className="form-select"
+                  value={mockDept}
+                  onChange={(e) => setMockDept(e.target.value)}
+                >
+                  <option>Homicide</option>
+                  <option>Narcotics</option>
+                  <option>Cybercrime</option>
+                  <option>Financial Crimes</option>
+                </select>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Primary action buttons */}
+        {!redirectInFlight && (
+          <div className="login-actions">
+            {/* Main sign-in button */}
+            <button
+              className="btn btn-primary btn-full"
+              onClick={handleLogin}
+              disabled={signing}
+            >
+              {signing ? (
+                <><Loader size={18} className="spinner" /> Starting sign-in…</>
+              ) : hasError ? (
+                "Try sign-in again"
+              ) : USE_MOCK ? (
+                `Sign in as ${mockRole}`
+              ) : (
+                <>
+                  <MicrosoftLogo />
+                  Sign in with Microsoft
+                </>
+              )}
+            </button>
+
+            {/* Show retry / sign-out when there's an error */}
+            {hasError && (
+              <>
+                <button
+                  className="btn btn-secondary btn-full"
+                  onClick={handleRetry}
+                >
+                  <RefreshCw size={16} />
+                  Retry (re-check session)
+                </button>
+                <button
+                  className="btn btn-ghost btn-full"
+                  onClick={handleLogout}
+                >
+                  <LogOut size={16} />
+                  Sign out &amp; clear state
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Footer note */}
+        <p className="login-closed-note">
+          {USE_MOCK
+            ? "Mock mode: no real authentication is performed."
+            : "This is a closed system. New accounts are created by administrators in the Entra ID portal."}
         </p>
       </div>
     </div>
+  );
+}
+
+/** Inline Microsoft logo SVG — no external dependency */
+function MicrosoftLogo() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <rect x="1"  y="1"  width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1"  width="9" height="9" fill="#7FBA00" />
+      <rect x="1"  y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
   );
 }

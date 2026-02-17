@@ -1,16 +1,24 @@
-// Toggle between mock and real API.
-//
-// IMPORTANT (final production requirement):
-// Mock mode must NOT be switchable via URL params or browser storage.
-// To enable mock mode, change this constant in code and redeploy.
+/**
+ * Central API configuration.
+ *
+ * USE_MOCK is a hardcoded constant — it cannot be toggled via URL params,
+ * localStorage, or any runtime mechanism. Change the value here and rebuild.
+ * Default for production: false (real mode).
+ */
 export const USE_MOCK = false;
 
+const baseUrl = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
+
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_BASE_URL || "http://localhost:7071",
+  BASE_URL: baseUrl,
   TIMEOUT: 30000,
   HEADERS: {
     "Content-Type": "application/json",
   },
 };
 
-export const mockDelay = (ms = 500) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Utility used by all mock API files to simulate network latency.
+ * Kept here so every mock file can `import { mockDelay } from "../config"`.
+ */
+export const mockDelay = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));

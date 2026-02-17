@@ -1,63 +1,55 @@
+/**
+ * Core HTTP client for all real API calls.
+ *
+ * Token acquisition strategy:
+ *   1. Try acquireTokenSilent (uses cache)
+ *   2. If InteractionRequiredAuthError → call acquireTokenRedirect
+ *      (redirects to Microsoft with existing SSO session, then returns to app with fresh token)
+ *   3. Any other error → surface to caller
+ *
+ * The acquireToken() import handles steps 1-2 so this file stays simple.
+ */
+
 import { API_CONFIG } from "../config";
-import { msalInstance, ensureActiveAccount } from "../../auth/msalInstance";
-import { loginRequest } from "../../auth/msalConfig";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
-
-async function getAccessToken() {
-  const account = await ensureActiveAccount();
-  if (!account) {
-    // Not signed in (yet).
-    return null;
-  }
-
-  // IMPORTANT: For guest/MSA accounts, MSAL can cache an account but still
-  // require an interactive step to mint a token for the API scope.
-  // We do NOT auto-trigger redirects here (it would create loops). Instead,
-  // we surface a clean "interaction_required" error so the UI can offer a
-  // "Try again" sign-in button.
-  try {
-    const result = await msalInstance.acquireTokenSilent({
-      ...loginRequest,
-      account,
-      // Force the configured tenant authority for token minting.
-      authority: msalInstance.getConfiguration()?.auth?.authority,
-    });
-    return result.accessToken;
-  } catch (e) {
-    if (e instanceof InteractionRequiredAuthError) {
-      const err = new Error("interaction_required");
-      err.code = "interaction_required";
-      throw err;
-    }
-    throw e;
-  }
-}
+import { acquireToken } from "../../auth/msalInstance";
 
 async function parseError(response) {
   const text = await response.text().catch(() => "");
   try {
-    return JSON.parse(text);
+    const obj = JSON.parse(text);
+    return { message: obj.message || obj.error || text || response.statusText, raw: obj };
   } catch (_) {
     return { message: text || response.statusText };
   }
 }
 
+/**
+ * Performs an authenticated fetch to the APIM-backed API.
+ *
+ * @param {string}  path     - API path, e.g. "/api/auth/me"
+ * @param {object}  options  - fetch options (method, body, headers, ...)
+ * @returns {Promise<any>}   - parsed JSON, plain text, or null (204)
+ */
 export async function apiFetch(path, options = {}) {
-  const token = await getAccessToken();
+  // Get Bearer token (may trigger acquireTokenRedirect and never resolve)
+  const token = await acquireToken();
 
   const headers = {
-    ...API_CONFIG.HEADERS,
+    "Content-Type": "application/json",
+    ...(API_CONFIG.HEADERS || {}),
     ...(options.headers || {}),
   };
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const url = path.startsWith("http") ? path : `${API_CONFIG.BASE_URL}${path}`;
+  const url = path.startsWith("http")
+    ? path
+    : `${API_CONFIG.BASE_URL}${path}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+  const timeout = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT || 30000);
 
   try {
     const response = await fetch(url, {
@@ -69,16 +61,26 @@ export async function apiFetch(path, options = {}) {
     if (response.status === 204) return null;
 
     if (!response.ok) {
-      const err = await parseError(response);
-      const error = new Error(err.message || response.statusText);
+      const errBody = await parseError(response);
+      const error = new Error(errBody.message || `HTTP ${response.status}`);
       error.status = response.status;
-      error.details = err;
+      error.details = errBody.raw || errBody;
       throw error;
     }
 
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) return response.json();
+    const ct = response.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      return response.json();
+    }
     return response.text();
+  } catch (err) {
+    // AbortController fires on timeout
+    if (err.name === "AbortError") {
+      const timeout = new Error("Request timed out");
+      timeout.code = "timeout";
+      throw timeout;
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

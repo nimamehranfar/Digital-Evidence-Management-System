@@ -1,28 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import * as departmentApi from "../api/departmentApi";
-import { Plus, Trash2, Save, X, Building2, RefreshCw, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, RefreshCw, Building2, X, Save } from "lucide-react";
 
 export default function DepartmentsPage() {
-  const { canManageDepartments, isAdmin } = useAuth();
-  const [items, setItems] = useState([]);
+  const { canManageDepartments } = useAuth();
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createDesc, setCreateDesc] = useState("");
-
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState("");
-  const [editDesc, setEditDesc] = useState("");
+  const [editId, setEditId]         = useState(null);
+  const [formName, setFormName]     = useState("");
+  const [formDesc, setFormDesc]     = useState("");
+  const [formError, setFormError]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function refresh() {
     setLoading(true);
     setError("");
     try {
-      const data = await departmentApi.getDepartments();
-      setItems(Array.isArray(data) ? data : []);
+      const d = await departmentApi.getDepartments();
+      setDepartments(Array.isArray(d) ? d : []);
     } catch (e) {
       setError(e.message || "Failed to load departments");
     } finally {
@@ -30,56 +29,64 @@ export default function DepartmentsPage() {
     }
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
-  const sorted = useMemo(() => (items || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")), [items]);
-
-  function startEdit(d) {
-    setEditingId(d.id);
-    setEditName(d.name || "");
-    setEditDesc(d.description || "");
+  function openCreate() {
+    setEditId(null);
+    setFormName("");
+    setFormDesc("");
+    setFormError("");
+    setShowCreate(true);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditName("");
-    setEditDesc("");
+  function openEdit(dept) {
+    setEditId(dept.id);
+    setFormName(dept.name || "");
+    setFormDesc(dept.description || "");
+    setFormError("");
+    setShowCreate(true);
   }
 
-  async function saveEdit(id) {
-    setError("");
+  function closeModal() {
+    setShowCreate(false);
+    setEditId(null);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!formName.trim()) { setFormError("Name is required."); return; }
+    setSubmitting(true);
+    setFormError("");
     try {
-      const updated = await departmentApi.updateDepartment(id, { name: editName, description: editDesc });
-      setItems((prev) => (prev || []).map((d) => (d.id === id ? updated : d)));
-      cancelEdit();
+      if (editId) {
+        const updated = await departmentApi.updateDepartment(editId, {
+          name: formName.trim(),
+          description: formDesc.trim() || undefined,
+        });
+        setDepartments((prev) => prev.map((d) => (d.id === editId ? { ...d, ...updated } : d)));
+      } else {
+        const created = await departmentApi.createDepartment({
+          name: formName.trim(),
+          description: formDesc.trim() || undefined,
+        });
+        setDepartments((prev) => [...prev, created]);
+      }
+      closeModal();
     } catch (e) {
-      setError(e.message || "Update failed");
+      setFormError(e.message || "Failed to save");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function remove(id) {
-    if (!window.confirm("Delete this department? This will cascade-delete its cases and evidence.")) return;
+  async function handleDelete(dept) {
+    if (!window.confirm(`Delete "${dept.name || dept.id}"? Cases assigned to this department will be affected.`)) return;
     setError("");
     try {
-      await departmentApi.deleteDepartment(id);
-      setItems((prev) => (prev || []).filter((d) => d.id !== id));
+      await departmentApi.deleteDepartment(dept.id);
+      setDepartments((prev) => prev.filter((d) => d.id !== dept.id));
     } catch (e) {
       setError(e.message || "Delete failed");
-    }
-  }
-
-  async function create() {
-    setError("");
-    try {
-      const created = await departmentApi.createDepartment({ name: createName, description: createDesc });
-      setItems((prev) => [created, ...(prev || [])]);
-      setCreateName("");
-      setCreateDesc("");
-      setShowCreate(false);
-    } catch (e) {
-      setError(e.message || "Create failed");
     }
   }
 
@@ -88,118 +95,109 @@ export default function DepartmentsPage() {
       <div className="page-header">
         <div>
           <h1>Departments</h1>
-          <p>{isAdmin ? "Governance: manage departments." : "Browse departments (read-only)."}</p>
+          <p>{departments.length} department{departments.length !== 1 ? "s" : ""}</p>
         </div>
-
-        <div className="button-group">
-          <button className="btn btn-secondary" onClick={refresh}>
-            <RefreshCw size={18} /> Refresh
+        <div className="page-actions">
+          <button className="btn btn-secondary btn-sm" onClick={refresh} disabled={loading}>
+            <RefreshCw size={15} /> Refresh
           </button>
-          {canManageDepartments() ? (
-            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-              <Plus size={18} /> New department
+          {canManageDepartments() && (
+            <button className="btn btn-primary btn-sm" onClick={openCreate}>
+              <Plus size={15} /> New Department
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {error ? (
-        <div className="alert alert-error">
-          <strong>Error:</strong> {error}
-        </div>
-      ) : null}
+      {error && <div className="alert alert-error" style={{ marginBottom: "var(--sp-md)" }}>{error}</div>}
 
-      {loading ? <p className="muted">Loading…</p> : null}
+      <div className="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>ID</th>
+              <th>Description</th>
+              {canManageDepartments() && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td colSpan={4} style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>Loading…</td></tr>
+            )}
+            {!loading && departments.length === 0 && (
+              <tr><td colSpan={4} style={{ textAlign: "center", padding: "2rem", color: "var(--color-text-secondary)" }}>
+                <Building2 size={32} style={{ color: "var(--color-gray-300)", display: "block", margin: "0 auto .5rem" }} />
+                No departments yet.
+                {canManageDepartments() && (
+                  <> <button className="link-button" onClick={openCreate}>Create one →</button></>
+                )}
+              </td></tr>
+            )}
+            {departments.map((d) => (
+              <tr key={d.id}>
+                <td style={{ fontWeight: 600 }}>{d.name || "—"}</td>
+                <td style={{ fontFamily: "monospace", fontSize: ".8125rem", color: "var(--color-text-secondary)" }}>{d.id}</td>
+                <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>{d.description || "—"}</td>
+                {canManageDepartments() && (
+                  <td>
+                    <div style={{ display: "flex", gap: ".375rem" }}>
+                      <button className="btn btn-sm btn-ghost" onClick={() => openEdit(d)} title="Edit">
+                        <Pencil size={14} />
+                      </button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(d)} title="Delete" style={{ color: "var(--color-danger)" }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {showCreate ? (
-        <div className="card" style={{ marginBottom: "1rem" }}>
-          <div className="card-header">
-            <h2>Create department</h2>
-            <button className="btn btn-icon" onClick={() => setShowCreate(false)} aria-label="Close">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="card-content">
-            <div className="form-group">
-              <label>Name</label>
-              <input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="e.g., Cybercrime" />
+      {/* Create / Edit Modal */}
+      {showCreate && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>{editId ? "Edit Department" : "New Department"}</h2>
+              <button className="btn-icon" onClick={closeModal}><X size={18} /></button>
             </div>
-            <div className="form-group">
-              <label>Description</label>
-              <input value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder="Optional" />
-            </div>
-            <div className="button-group">
-              <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={create} disabled={!createName.trim()}>
-                <Save size={18} /> Create
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="card">
-        <div className="card-header">
-          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Building2 size={18} /> Department list
-          </h2>
-        </div>
-        <div className="card-content">
-          {sorted.length === 0 ? <p className="muted">No departments found.</p> : null}
-
-          {sorted.map((d) => {
-            const isEditing = editingId === d.id;
-            return (
-              <div key={d.id} className="list-item">
-                <div className="list-item-body">
-                  {isEditing ? (
-                    <>
-                      <div className="form-group">
-                        <label>Name</label>
-                        <input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                      </div>
-                      <div className="form-group">
-                        <label>Description</label>
-                        <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-                      </div>
-                      <div className="button-group">
-                        <button className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>
-                        <button className="btn btn-primary" onClick={() => saveEdit(d.id)} disabled={!editName.trim()}>
-                          <Save size={18} /> Save
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="list-item-title">{d.name || d.id}</div>
-                      <div className="list-item-meta">
-                        <span>{d.id}</span>
-                        {d.description ? (
-                          <>
-                            <span>•</span>
-                            <span>{d.description}</span>
-                          </>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body">
+                {formError && <div className="alert alert-error" style={{ marginBottom: "1rem" }}>{formError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Name *</label>
+                  <input
+                    className="form-input"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g. Homicide"
+                  />
                 </div>
-
-                {!isEditing && canManageDepartments() ? (
-                  <div className="button-group">
-                    <button className="btn btn-secondary btn-sm" onClick={() => startEdit(d)}>
-                      <Pencil size={16} /> Edit
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => remove(d.id)}>
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </div>
-                ) : null}
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-textarea"
+                    value={formDesc}
+                    onChange={(e) => setFormDesc(e.target.value)}
+                    rows={2}
+                    placeholder="Optional"
+                  />
+                </div>
               </div>
-            );
-          })}
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  <Save size={15} /> {submitting ? "Saving…" : editId ? "Save Changes" : "Create"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

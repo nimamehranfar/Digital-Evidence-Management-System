@@ -1,147 +1,158 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import * as evidenceApi from "../api/evidenceApi";
-import { Search, Trash2, RefreshCw } from "lucide-react";
+import { Search, FileText, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
+const STATUS_CHIP = {
+  COMPLETED:  "status-chip-completed",
+  PROCESSING: "status-chip-processing",
+  UPLOADED:   "status-chip-uploaded",
+  FAILED:     "status-chip-failed",
+};
+
+function EvidenceChip({ status }) {
+  const s = (status || "UPLOADED").toUpperCase();
+  return (
+    <span className={`status-chip ${STATUS_CHIP[s] || "status-chip-uploaded"}`}>
+      {s === "COMPLETED"  && <CheckCircle  size={11} />}
+      {s === "FAILED"     && <XCircle      size={11} />}
+      {s === "PROCESSING" && <Clock        size={11} />}
+      {!["COMPLETED","FAILED","PROCESSING"].includes(s) && <AlertCircle size={11} />}
+      {s}
+    </span>
+  );
+}
+
 export default function SearchPage() {
-  const { canDeleteEvidence, user, isProsecutor } = useAuth();
+  const { isCaseOfficer, user } = useAuth();
 
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
+  const [query, setQuery]   = useState("");
   const [caseId, setCaseId] = useState("");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [results, setResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError]   = useState("");
 
-  const department = user?.department || "";
-
-  async function runSearch() {
-    setLoading(true);
+  async function handleSearch(e) {
+    e.preventDefault();
+    if (!query.trim() && !caseId.trim()) {
+      setError("Enter a search term or case ID.");
+      return;
+    }
+    setSearching(true);
     setError("");
+    setResults(null);
     try {
-      const data = await evidenceApi.searchEvidence({
-        q: q.trim(),
-        status: status || undefined,
-        caseId: caseId.trim() || undefined,
-        department: department || undefined,
-      });
-      setResults(Array.isArray(data) ? data : []);
+      const params = {};
+      if (query.trim())  params.q      = query.trim();
+      if (caseId.trim()) params.caseId = caseId.trim();
+
+      const res = await evidenceApi.searchEvidence(params);
+      setResults(Array.isArray(res) ? res : res?.results || res?.value || []);
     } catch (e) {
       setError(e.message || "Search failed");
     } finally {
-      setLoading(false);
+      setSearching(false);
     }
   }
-
-  async function remove(evidenceId) {
-    if (!window.confirm("Delete this evidence item?")) return;
-    setError("");
-    try {
-      await evidenceApi.deleteEvidence(evidenceId);
-      setResults((prev) => (prev || []).filter((x) => x.id !== evidenceId));
-    } catch (e) {
-      setError(e.message || "Delete failed");
-    }
-  }
-
-  const hint = useMemo(() => {
-    if (department) return `Department-scoped view (case_officer): ${department}`;
-    return "Backend enforces department RBAC.";
-  }, [department]);
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>Search evidence</h1>
-          <p>{hint}</p>
-        </div>
-        <div className="button-group">
-          <button className="btn btn-secondary" onClick={runSearch} disabled={loading}>
-            <Search size={18} /> Search
-          </button>
-          <button className="btn btn-secondary" onClick={() => { setQ(""); setStatus(""); setCaseId(""); setResults([]); setError(""); }}>
-            <RefreshCw size={18} /> Reset
-          </button>
+          <h1>Evidence Search</h1>
+          <p>
+            Full-text search across all evidence{isCaseOfficer ? ` in the ${user?.department || "assigned"} department` : ""}.
+          </p>
         </div>
       </div>
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
-
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div className="card-header">
-          <h2>Filters</h2>
-        </div>
-        <div className="card-content">
-          <div className="grid-2">
-            <div className="form-group">
-              <label>Query</label>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="keywords…" />
-            </div>
-
-            <div className="form-group">
-              <label>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="">(any)</option>
-                <option value="UPLOADED">UPLOADED</option>
-                <option value="PROCESSING">PROCESSING</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="FAILED">FAILED</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Case ID</label>
-              <input value={caseId} onChange={(e) => setCaseId(e.target.value)} placeholder="optional caseId" />
+      {/* Search form */}
+      <div className="card" style={{ marginBottom: "var(--sp-xl)", padding: "1.5rem" }}>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: ".75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "2 1 240px" }}>
+            <label className="form-label">Keyword / Full-text</label>
+            <div className="search-box">
+              <Search size={16} className="search-icon" />
+              <input
+                className="search-input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search evidence content, tags…"
+              />
             </div>
           </div>
-
-          <div className="button-group">
-            <button className="btn btn-primary" onClick={runSearch} disabled={loading}>
-              <Search size={18} /> Run search
-            </button>
+          <div style={{ flex: "1 1 180px" }}>
+            <label className="form-label">Case ID (optional)</label>
+            <input
+              className="form-input"
+              value={caseId}
+              onChange={(e) => setCaseId(e.target.value)}
+              placeholder="e.g. case-001"
+            />
           </div>
-
-          {isProsecutor ? <p className="muted">Read-only role: delete is disabled.</p> : null}
-        </div>
+          <button type="submit" className="btn btn-primary" disabled={searching} style={{ height: 40, alignSelf: "flex-end" }}>
+            <Search size={16} />
+            {searching ? "Searching…" : "Search"}
+          </button>
+        </form>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2>Results</h2>
-        </div>
-        <div className="card-content">
-          {loading ? <p className="muted">Searching…</p> : null}
-          {!loading && results.length === 0 ? <p className="muted">No results.</p> : null}
+      {error && <div className="alert alert-error" style={{ marginBottom: "var(--sp-md)" }}>{error}</div>}
 
-          {results.map((e) => (
-            <div key={e.id} className="list-item">
-              <div className="list-item-body">
-                <div className="list-item-title">{e.fileName || e.id}</div>
-                <div className="list-item-meta">
-                  <span>case: {e.caseId}</span>
-                  <span>•</span>
-                  <span>dept: {e.department}</span>
-                  <span>•</span>
-                  <span>status: {(e.status || "").toUpperCase()}</span>
-                  <span>•</span>
-                  <span>{e.uploadedAt ? format(new Date(e.uploadedAt), "PPp") : "—"}</span>
-                </div>
-                {e.extractedText ? <p className="muted" style={{ marginTop: "0.5rem" }}>{String(e.extractedText).slice(0, 200)}{String(e.extractedText).length > 200 ? "…" : ""}</p> : null}
+      {/* Results */}
+      {results !== null && (
+        <div>
+          <p style={{ marginBottom: "var(--sp-md)", color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
+            {results.length} result{results.length !== 1 ? "s" : ""}
+          </p>
+
+          {results.length === 0 ? (
+            <div className="card">
+              <div className="empty-state">
+                <FileText size={40} className="empty-state-icon" />
+                <h3>No results found</h3>
+                <p>Try different keywords or a different case ID.</p>
               </div>
-
-              {canDeleteEvidence() ? (
-                <div className="button-group">
-                  <button className="btn btn-danger btn-sm" onClick={() => remove(e.id)}>
-                    <Trash2 size={16} /> Delete
-                  </button>
-                </div>
-              ) : null}
             </div>
-          ))}
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>File Name</th>
+                    <th>Case</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((r) => (
+                    <tr key={r.id || r.evidenceId}>
+                      <td style={{ fontWeight: 500 }}>
+                        {r.fileName || r.file_name || r.id || r.evidenceId}
+                      </td>
+                      <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
+                        {r.caseId || r.case_id || "—"}
+                      </td>
+                      <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
+                        {r.fileType || r.file_type || "—"}
+                      </td>
+                      <td><EvidenceChip status={r.status} /></td>
+                      <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
+                        {r.uploadedAt || r.uploaded_at
+                          ? format(new Date(r.uploadedAt || r.uploaded_at), "PP")
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { USE_MOCK } from "../api/config";
+import { Shield, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
@@ -9,87 +10,102 @@ export default function LoginPage() {
   const location = useLocation();
 
   const [mockRole, setMockRole] = useState("detective");
-  const [mockDept, setMockDept] = useState("dept-1");
-  const [mockName, setMockName] = useState("Mock User");
-  const [error, setError] = useState("");
+  const [mockDepartment, setMockDepartment] = useState("dept-1");
+  const [err, setErr] = useState("");
+  const [loginInFlight, setLoginInFlight] = useState(false);
 
+  // If already logged in, go home.
   useEffect(() => {
-    if (user) {
-      const from = location.state?.from?.pathname || "/";
-      navigate(from, { replace: true });
-    }
-  }, [user]);
+    if (user) navigate("/", { replace: true });
+  }, [user, navigate]);
+
+  // Reset one-click "in flight" state if the user comes back from redirect or reloads.
+  useEffect(() => {
+    setLoginInFlight(false);
+  }, [location.key]);
+
+  const canClick = useMemo(() => !loading && !loginInFlight, [loading, loginInFlight]);
 
   async function onLogin() {
-    setError("");
+    setErr("");
+    if (!canClick) return;
+
+    setLoginInFlight(true);
+
     try {
       if (USE_MOCK) {
-        await login({
-          name: mockName,
-          roles: [mockRole],
-          department: mockRole === "case_officer" ? mockDept : null,
-        });
-      } else {
-        await login(); // MSAL redirect
+        await login({ role: mockRole, department: mockDepartment });
+        return;
       }
+      // Real mode triggers redirect. If MSAL throws synchronously, allow retry immediately.
+      await login();
     } catch (e) {
-      setError(e.message || "Login failed");
+      const msg = String(e?.message || e || "");
+      // If MSAL thinks an interaction is still in progress, we allow re-click without waiting.
+      // realAuthApi.login() already clears the stuck flag before calling loginRedirect.
+      if (msg.includes("interaction_in_progress")) {
+        setErr("Sign-in was already in progress. Click Sign in again to retry.");
+      } else {
+        setErr(msg || "Sign-in failed. Try again.");
+      }
+      setLoginInFlight(false);
     }
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>Digital Evidence Management System</h1>
-        <p className="muted">
-          {USE_MOCK
-            ? "Mock mode: select a role to simulate /api/auth/me."
-            : "Sign in with Microsoft Entra ID (Workforce)."}
-        </p>
+    <div className="container" style={{ maxWidth: 980 }}>
+      <div className="card" style={{ marginTop: 40 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+          <div className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Shield size={16} />
+            DEMS
+          </div>
+          <div>
+            <h1 style={{ margin: 0, textAlign: "left" }}>Digital Evidence Management System</h1>
+            <p className="muted" style={{ marginTop: 6, textAlign: "left" }}>
+              Closed system. Users are created/invited in Microsoft Entra. No self-registration.
+            </p>
+          </div>
+        </div>
 
-        {error ? (
-          <div className="alert alert-error" style={{ marginTop: "1rem" }}>
-            {error}
+        {err ? (
+          <div className="alert alert-error" style={{ marginBottom: 14 }}>
+            {err}
           </div>
         ) : null}
 
         {USE_MOCK ? (
-          <div style={{ marginTop: "1rem" }}>
-            <div className="form-group">
-              <label>Display name</label>
-              <input value={mockName} onChange={(e) => setMockName(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label>Role</label>
-              <select value={mockRole} onChange={(e) => setMockRole(e.target.value)}>
-                <option value="admin">admin (governance only)</option>
-                <option value="detective">detective (full CRUD)</option>
-                <option value="case_officer">case_officer (dept scoped)</option>
-                <option value="prosecutor">prosecutor (read-only)</option>
+          <div className="grid-2">
+            <div>
+              <label className="label">Mock role</label>
+              <select className="input" value={mockRole} onChange={(e) => setMockRole(e.target.value)}>
+                <option value="admin">admin</option>
+                <option value="detective">detective</option>
+                <option value="case_officer">case_officer</option>
+                <option value="prosecutor">prosecutor</option>
               </select>
             </div>
-
-            {mockRole === "case_officer" ? (
-              <div className="form-group">
-                <label>Department (case_officer)</label>
-                <input value={mockDept} onChange={(e) => setMockDept(e.target.value)} placeholder="dept-1" />
-              </div>
-            ) : null}
-
-            <button className="btn btn-primary" onClick={onLogin} disabled={loading}>
-              Continue
-            </button>
+            <div>
+              <label className="label">Mock department (case_officer only)</label>
+              <input className="input" value={mockDepartment} onChange={(e) => setMockDepartment(e.target.value)} />
+            </div>
           </div>
         ) : (
-          <button className="btn btn-primary" onClick={onLogin} disabled={loading} style={{ marginTop: "1rem" }}>
-            Sign in with Microsoft
-          </button>
+          <div className="muted" style={{ marginBottom: 14 }}>
+            You will be redirected to Microsoft to sign in.
+          </div>
         )}
 
-        <p className="muted" style={{ marginTop: "1rem" }}>
-          Closed system: no self-registration. Accounts are created/invited by administrators in Entra ID.
-        </p>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={onLogin} disabled={!canClick}>
+            <LogIn size={16} />
+            {loginInFlight ? "Signing in..." : "Sign in with Microsoft"}
+          </button>
+        </div>
+
+        <div className="muted" style={{ marginTop: 14 }}>
+          Tip: If you ever get &quot;interaction_in_progress&quot;, just click the button again.
+        </div>
       </div>
     </div>
   );

@@ -13,6 +13,12 @@ jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
+    env:
+      REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+      REACT_APP_ENTRA_TENANT_ID: ${{ secrets.REACT_APP_ENTRA_TENANT_ID }}
+      REACT_APP_ENTRA_CLIENT_ID: ${{ secrets.REACT_APP_ENTRA_CLIENT_ID }}
+      REACT_APP_ENTRA_AUTHORITY: ${{ secrets.REACT_APP_ENTRA_AUTHORITY }}
+      REACT_APP_ENTRA_API_SCOPE: ${{ secrets.REACT_APP_ENTRA_API_SCOPE }}
     name: Build and Deploy Job
     steps:
       - uses: actions/checkout@v3
@@ -35,6 +41,12 @@ jobs:
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
+    env:
+      REACT_APP_API_BASE_URL: ${{ secrets.REACT_APP_API_BASE_URL }}
+      REACT_APP_ENTRA_TENANT_ID: ${{ secrets.REACT_APP_ENTRA_TENANT_ID }}
+      REACT_APP_ENTRA_CLIENT_ID: ${{ secrets.REACT_APP_ENTRA_CLIENT_ID }}
+      REACT_APP_ENTRA_AUTHORITY: ${{ secrets.REACT_APP_ENTRA_AUTHORITY }}
+      REACT_APP_ENTRA_API_SCOPE: ${{ secrets.REACT_APP_ENTRA_API_SCOPE }}
     name: Close Pull Request Job
     steps:
       - name: Close Pull Request

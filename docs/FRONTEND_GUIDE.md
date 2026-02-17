@@ -77,8 +77,3 @@ Mock mode simulates the same contract and status progression:
 - Analytics UI and any analytics API usage.
 - Self-registration / sign-up flows.
 - In-app user creation: handled in Entra portal.
-
-
-### Build-time env vars (SWA)
-
-For Create React App, `REACT_APP_*` values must be provided during the GitHub Actions build (repo secrets), because `.env` is not committed.

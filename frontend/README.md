@@ -76,8 +76,8 @@ Real mode is the default behavior.
 
 Mock mode is toggled without inventing new env vars. It uses the existing `USE_MOCK` switch in `frontend/src/api/config.js`, but you can toggle it at runtime:
 
-- URL param: `
-  Example: `http://localhost:3000/
+- URL param: `?mock=1` forces mock mode  
+  Example: `http://localhost:3000/?mock=1`
 - URL param: `?mock=0` forces real mode
 - localStorage: `localStorage.setItem("USE_MOCK","true")` (or `"false"`)
 
@@ -191,34 +191,3 @@ Users (**admin**):
 - Analytics UI and any analytics API usage (not used in this project)
 - Any registration / sign-up flows (closed system)
 - Any in-app “Create user” flows (handled in Entra ID portal)
-
-
-
-## Azure Static Web Apps: environment variables (React build-time)
-
-React (Create React App) reads `REACT_APP_*` variables **at build time**, not at runtime.
-
-Because `.env` is not committed, you must provide these values to the GitHub Actions build:
-
-1. In GitHub repo: **Settings → Secrets and variables → Actions → New repository secret**
-2. Create these secrets (names must match exactly):
-
-- `REACT_APP_API_BASE_URL`
-- `REACT_APP_ENTRA_TENANT_ID`
-- `REACT_APP_ENTRA_CLIENT_ID`
-- `REACT_APP_ENTRA_AUTHORITY`
-- `REACT_APP_ENTRA_API_SCOPE`
-
-3. The workflow `.github/workflows/azure-static-web-apps-*.yml` exports them as job env vars so the SWA build embeds them.
-
-If any of these are missing, MSAL may crash at runtime (example error: `Cannot read properties of undefined (reading 'endsWith')`).
-
-
-## Mock mode
-
-Mock mode is hard-coded in `src/api/config.js`:
-
-- `export const USE_MOCK = false;` (real mode)
-- `export const USE_MOCK = true;` (mock mode)
-
-Change it, rebuild, redeploy.

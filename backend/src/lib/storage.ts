@@ -65,3 +65,47 @@ export async function createUploadSas(
     expiresOn: expiresOn.toISOString(),
   };
 }
+
+export type ReadInit = {
+  blobUrl: string;
+  blobPath: string;
+  sasUrl: string;
+  expiresOn: string;
+};
+
+export async function createReadSas(
+  accountName: string,
+  containerName: string,
+  blobPath: string,
+  expiresInMinutes: number
+): Promise<ReadInit> {
+  const serviceClient = getBlobServiceClient(accountName);
+
+  const now = new Date();
+  const startsOn = new Date(now.getTime() - 2 * 60 * 1000);
+  const expiresOn = new Date(now.getTime() + expiresInMinutes * 60 * 1000);
+
+  // User delegation key requires Microsoft Entra auth.
+  const udk = await serviceClient.getUserDelegationKey(startsOn, expiresOn);
+
+  const sas = generateBlobSASQueryParameters(
+    {
+      containerName,
+      blobName: blobPath,
+      protocol: SASProtocol.Https,
+      permissions: BlobSASPermissions.parse("r"), // read
+      startsOn,
+      expiresOn,
+    },
+    udk,
+    accountName
+  ).toString();
+
+  const blobUrl = `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}`;
+  return {
+    blobUrl,
+    blobPath,
+    sasUrl: `${blobUrl}?${sas}`,
+    expiresOn: expiresOn.toISOString(),
+  };
+}

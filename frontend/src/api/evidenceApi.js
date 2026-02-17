@@ -12,4 +12,5 @@ export const getEvidence = api.getEvidence;
 export const getEvidenceById = api.getEvidenceById;
 export const deleteEvidence = api.deleteEvidence;
 export const getEvidenceStatus = api.getEvidenceStatus;
+export const getEvidenceReadUrl = api.getEvidenceReadUrl;
 export const searchEvidence = api.searchEvidence;

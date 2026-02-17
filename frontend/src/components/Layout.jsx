@@ -16,7 +16,9 @@ export default function Layout() {
     const links = [];
     if (isAdmin) {
       links.push({ to: "/departments", icon: Building2, label: "Departments" });
-      links.push({ to: "/users",       icon: Users,     label: "Users" });
+      // User provisioning/listing is intentionally disabled in this build.
+      // Keep route/components in place, but grey out navigation.
+      links.push({ to: "/users",       icon: Users,     label: "Users", disabled: true });
       links.push({ to: "/profile",     icon: User,      label: "Profile" });
       return links;
     }
@@ -101,17 +103,29 @@ export default function Layout() {
         <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
           <nav className="navigation">
             {navLinks.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  `nav-link${isActive ? " nav-link-active" : ""}`
-                }
-                onClick={() => setMobileOpen(false)}
-              >
-                <link.icon size={20} />
-                <span>{link.label}</span>
-              </NavLink>
+              link.disabled ? (
+                <div
+                  key={link.to}
+                  className="nav-link nav-link-disabled"
+                  title="Disabled"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <link.icon size={20} />
+                  <span>{link.label}</span>
+                </div>
+              ) : (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  className={({ isActive }) =>
+                    `nav-link${isActive ? " nav-link-active" : ""}`
+                  }
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <link.icon size={20} />
+                  <span>{link.label}</span>
+                </NavLink>
+              )
             ))}
           </nav>
         </aside>

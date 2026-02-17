@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCase } from "../context/CaseContext";
 import * as caseApi from "../api/caseApi";
+import * as evidenceApi from "../api/evidenceApi";
 import {
   ArrowLeft, Trash2, Save, RefreshCw, Plus, FileText,
-  CheckCircle, XCircle, Clock, AlertCircle,
+  CheckCircle, XCircle, Clock, AlertCircle, ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
+import EvidenceDetailsModal from "../components/EvidenceDetailsModal";
 
 function normalizeCaseStatus(s) {
   const u = String(s || "").toUpperCase();
@@ -50,6 +52,8 @@ export default function CaseDetailPage() {
   const [pageError, setPageError] = useState("");
   const [saving, setSaving]     = useState(false);
   const [addingNote, setAddingNote] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailEvidence, setDetailEvidence] = useState(null);
 
   // Load case from context cache or direct fetch
   useEffect(() => {
@@ -110,6 +114,18 @@ export default function CaseDetailPage() {
     setPageError("");
     try { await refreshEvidenceStatus(evidenceId); await reload(); }
     catch (e) { setPageError(e.message || "Refresh failed"); }
+  }
+
+  async function onOpenEvidence(evidenceId) {
+    const r = await evidenceApi.getEvidenceReadUrl(evidenceId);
+    const url = r?.readUrl;
+    if (!url) throw new Error("Missing readUrl");
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function onShowEvidenceDetails(ev) {
+    setDetailEvidence(ev);
+    setDetailOpen(true);
   }
 
   if (!caseItem) {
@@ -247,6 +263,7 @@ export default function CaseDetailPage() {
                 <th>Type</th>
                 <th>Status</th>
                 <th>Uploaded</th>
+                <th style={{ width: 260 }}></th>
                 {canDeleteEvidence() && <th></th>}
               </tr>
             </thead>
@@ -264,6 +281,23 @@ export default function CaseDetailPage() {
                   <td><EvidenceChip status={ev.status} /></td>
                   <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
                     {ev.uploadedAt ? format(new Date(ev.uploadedAt), "PP") : "—"}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
+                      <button className="btn btn-sm btn-secondary" onClick={() => onShowEvidenceDetails(ev)}>
+                        Show details
+                      </button>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={async () => {
+                          try { await onOpenEvidence(ev.id); }
+                          catch (e) { setPageError(e?.message || "Open failed"); }
+                        }}
+                        title="Open / Download"
+                      >
+                        <ExternalLink size={14} /> Open
+                      </button>
+                    </div>
                   </td>
                   {canDeleteEvidence() && (
                     <td>
@@ -283,6 +317,12 @@ export default function CaseDetailPage() {
           </table>
         </div>
       </div>
+
+      <EvidenceDetailsModal
+        open={detailOpen}
+        onClose={() => { setDetailOpen(false); setDetailEvidence(null); }}
+        evidence={detailEvidence}
+      />
     </div>
   );
 }

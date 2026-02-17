@@ -104,6 +104,16 @@ export async function getEvidenceStatus(evidenceId) {
   return { id: evidenceId, status: item.status };
 }
 
+export async function getEvidenceReadUrl(evidenceId) {
+  await mockDelay(120);
+  // In mock mode, just return a data URL-ish placeholder.
+  return {
+    evidenceId,
+    readUrl: `mock://read/${encodeURIComponent(evidenceId)}`,
+    expiresOn: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  };
+}
+
 export async function searchEvidence(params = {}) {
   await mockDelay(200);
   const q = (params.q || "").toLowerCase();

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import * as evidenceApi from "../api/evidenceApi";
-import { Search, FileText, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { Search, FileText, CheckCircle, XCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
+import EvidenceDetailsModal from "../components/EvidenceDetailsModal";
 
 const STATUS_CHIP = {
   COMPLETED:  "status-chip-completed",
@@ -32,6 +33,34 @@ export default function SearchPage() {
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [error, setError]   = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailEvidence, setDetailEvidence] = useState(null);
+
+  async function openEvidence(evidenceId) {
+    const id = evidenceId || "";
+    if (!id) return;
+    const r = await evidenceApi.getEvidenceReadUrl(id);
+    const url = r?.readUrl;
+    if (!url) throw new Error("Missing readUrl");
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function showDetails(row) {
+    const id = row?.id || row?.evidenceId;
+    if (!id) return;
+    setDetailLoading(true);
+    setDetailOpen(true);
+    try {
+      const full = await evidenceApi.getEvidenceById(id);
+      setDetailEvidence({ ...(row || {}), ...(full || {}) });
+    } catch {
+      // Fallback to whatever we have from search results.
+      setDetailEvidence(row || {});
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -125,6 +154,7 @@ export default function SearchPage() {
                     <th>Type</th>
                     <th>Status</th>
                     <th>Uploaded</th>
+                    <th style={{ width: 220 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -145,6 +175,26 @@ export default function SearchPage() {
                           ? format(new Date(r.uploadedAt || r.uploaded_at), "PP")
                           : "—"}
                       </td>
+                      <td>
+                        <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => showDetails(r)}
+                          >
+                            Show details
+                          </button>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={async () => {
+                              try { await openEvidence(r.id || r.evidenceId); }
+                              catch (e) { setError(e?.message || "Open failed"); }
+                            }}
+                            title="Open / Download"
+                          >
+                            <ExternalLink size={14} /> Open
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -153,6 +203,12 @@ export default function SearchPage() {
           )}
         </div>
       )}
+
+      <EvidenceDetailsModal
+        open={detailOpen}
+        onClose={() => { setDetailOpen(false); setDetailEvidence(null); }}
+        evidence={detailLoading ? { fileName: "Loading…" } : detailEvidence}
+      />
     </div>
   );
 }

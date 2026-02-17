@@ -10,7 +10,7 @@ import {
 } from "../../lib/authz";
 import { getContainers } from "../../lib/cosmos";
 import { getEnv } from "../../config/env";
-import { createUploadSas, getContainerClient } from "../../lib/storage";
+import { createReadSas, createUploadSas, getContainerClient } from "../../lib/storage";
 import { readJson, getQuery } from "../../lib/http";
 import {
   EvidenceUploadInitSchema,
@@ -228,6 +228,37 @@ export async function evidenceStatus(req: HttpRequest, context: InvocationContex
   });
 }
 
+// Mint a short-lived READ SAS for opening/downloading private blobs in the browser.
+export async function evidenceReadUrl(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  if (req.method === "OPTIONS") return handleOptions(req);
+  return safeHandler(req, context, async () => {
+    const auth = await requireAuth(req);
+    requireInvestigativeRead(auth);
+
+    const evidenceId = req.params.evidenceId;
+    if (!evidenceId) return problem(400, "Missing evidenceId");
+    const found = await findEvidenceById(evidenceId);
+    if (!found) return problem(404, "Evidence not found");
+    if (found.department) await assertDepartmentAccess(auth, found.department);
+    if (!found.blobPathRaw) return problem(409, "Evidence has no blobPathRaw");
+
+    const env = getEnv();
+    const sas = await createReadSas(
+      env.AZURE_STORAGE_ACCOUNT_NAME,
+      env.EVIDENCE_CONTAINER_RAW,
+      found.blobPathRaw,
+      15
+    );
+
+    return json(200, {
+      evidenceId: found.id,
+      caseId: found.caseId,
+      readUrl: sas.sasUrl,
+      expiresOn: sas.expiresOn,
+    });
+  });
+}
+
 export async function evidenceSearch(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   if (req.method === "OPTIONS") return handleOptions(req);
   return safeHandler(req, context, async () => {
@@ -328,6 +359,13 @@ app.http("EvidenceStatus", {
   authLevel: "anonymous",
   route: "evidence/id/{evidenceId}/status",
   handler: evidenceStatus,
+});
+
+app.http("EvidenceReadUrl", {
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  route: "evidence/id/{evidenceId}/read-url",
+  handler: evidenceReadUrl,
 });
 
 app.http("EvidenceDelete", {

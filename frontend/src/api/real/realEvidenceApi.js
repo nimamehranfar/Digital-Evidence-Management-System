@@ -69,6 +69,10 @@ export async function getEvidenceStatus(evidenceId) {
   return apiFetch(`/api/evidence/id/${encodeURIComponent(evidenceId)}/status`, { method: "GET" });
 }
 
+export async function getEvidenceReadUrl(evidenceId) {
+  return apiFetch(`/api/evidence/id/${encodeURIComponent(evidenceId)}/read-url`, { method: "GET" });
+}
+
 export async function searchEvidence(params = {}) {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);

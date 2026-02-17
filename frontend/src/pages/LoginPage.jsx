@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { USE_MOCK } from "../api/config";
+import { msalInstance } from "../auth/msalInstance";
 
 export default function LoginPage() {
-  const { user, login, loading } = useAuth();
+  const { user, login, logout, loading, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -14,12 +15,19 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const hasCachedMsalAccount = !USE_MOCK && msalInstance.getAllAccounts().length > 0;
+
   useEffect(() => {
     if (user) {
       const from = location.state?.from?.pathname || "/";
       navigate(from, { replace: true });
     }
   }, [user]);
+
+  // If we have a cached MSAL account but /api/auth/me failed, show the reason.
+  useEffect(() => {
+    if (!user && authError) setError(authError);
+  }, [authError]);
 
   async function onLogin() {
     setError("");
@@ -40,6 +48,16 @@ export default function LoginPage() {
     }
   }
 
+  async function onLogoutAndRetry() {
+    setError("");
+    setBusy(true);
+    try {
+      await logout();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-card">
@@ -53,6 +71,24 @@ export default function LoginPage() {
         {error ? (
           <div className="alert alert-error" style={{ marginTop: "1rem" }}>
             {error}
+          </div>
+        ) : null}
+
+        {!USE_MOCK && hasCachedMsalAccount && !user ? (
+          <div className="alert" style={{ marginTop: "1rem" }}>
+            <strong>Microsoft sign-in detected</strong>
+            <div className="muted" style={{ marginTop: ".5rem" }}>
+              You have a cached Microsoft account, but the app could not load <code>/api/auth/me</code>.
+              This usually means the API token could not be minted for the correct tenant/scope, or the backend rejected it.
+            </div>
+            <div style={{ display: "flex", gap: ".5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={onLogin} disabled={loading || busy}>
+                Try sign-in again
+              </button>
+              <button className="btn" onClick={onLogoutAndRetry} disabled={loading || busy}>
+                Sign out
+              </button>
+            </div>
           </div>
         ) : null}
 

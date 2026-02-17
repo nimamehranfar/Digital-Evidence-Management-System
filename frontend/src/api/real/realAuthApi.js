@@ -8,7 +8,7 @@ import { DEMS_AUTH_CONFIG, loginRequest } from "../../auth/msalConfig";
  */
 export async function login() {
   // Guard: missing build-time config causes MSAL to crash internally (e.g. authority.endsWith).
-  if (!DEMS_AUTH_CONFIG.clientId || !DEMS_AUTH_CONFIG.authority) {
+  if (!DEMS_AUTH_CONFIG.clientId || !DEMS_AUTH_CONFIG.authority || !DEMS_AUTH_CONFIG.apiScope) {
     throw new Error(
       "Missing Entra config in frontend build. Ensure GitHub Actions injects REACT_APP_ENTRA_CLIENT_ID and REACT_APP_ENTRA_AUTHORITY (and REACT_APP_ENTRA_API_SCOPE) during build."
     );
@@ -20,13 +20,21 @@ export async function login() {
   // MSAL can get stuck in interaction_in_progress. We clean stale state and retry.
   await finalizeAnyPendingRedirect();
 
+  // Force account picker so guest/MSA users can select the correct directory/tenant.
+  // Also force the configured authority to reduce "came back but not authorized" cases.
+  const request = {
+    ...loginRequest,
+    authority: DEMS_AUTH_CONFIG.authority,
+    prompt: "select_account",
+  };
+
   try {
-    return await msalInstance.loginRedirect(loginRequest);
+    return await msalInstance.loginRedirect(request);
   } catch (e) {
     if (String(e?.errorCode || e?.message || "").includes("interaction_in_progress")) {
       clearStaleMsalInteractionState();
       await finalizeAnyPendingRedirect();
-      return msalInstance.loginRedirect(loginRequest);
+      return msalInstance.loginRedirect(request);
     }
     throw e;
   }

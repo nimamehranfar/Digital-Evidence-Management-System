@@ -58,7 +58,26 @@ export function AuthProvider({ children }) {
         const u = await authApi.getCurrentUser();
         if (!cancelled) setUser(u);
       } catch (e) {
-        if (!cancelled) setUser(null);
+        if (!cancelled) {
+          setUser(null);
+
+          // Surface a useful error for the login page.
+          const status = e?.status;
+          const code = e?.code;
+          const msg = String(e?.message || "");
+
+          if (code === "interaction_required" || msg === "interaction_required") {
+            setAuthError(
+              "Signed into Microsoft, but a new consent/interaction is required to get an API token. Click 'Try sign-in again'."
+            );
+          } else if (status === 401) {
+            setAuthError("Unauthorized (401): your sign-in did not produce a valid API token for this backend.");
+          } else if (status === 403) {
+            setAuthError("Forbidden (403): your account is not authorized for this app/API (or role mapping is missing).");
+          } else if (msg) {
+            setAuthError(msg);
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

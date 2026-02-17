@@ -1,0 +1,136 @@
+PART 4 — FRONTEND HANDOFF REPORT (Chat-to-date)
+
+Scope boundary
+- This report covers ONLY frontend work done in Part 4 during this chat.
+- Backend/Azure Part 1–3 are treated as source-of-truth elsewhere and are NOT repeated here.
+
+Repo + deployment context (frontend)
+- Frontend is a CRA-based React app deployed to Azure Static Web Apps (SWA).
+- Real mode targets APIM base URL (provided via REACT_APP_API_BASE_URL at build-time).
+- Auth strategy remains Microsoft Entra ID (Workforce) using MSAL redirect (Microsoft-hosted login).
+- System is closed: NO registration / sign-up UI anywhere in the frontend.
+
+Primary goals implemented (frontend)
+1) Remove MSAL React library (React 19 peer conflict)
+- Problem encountered:
+  - npm install failed with ERESOLVE because @azure/msal-react peer-dep supports React <= 18 while repo uses React 19.
+- Fix:
+  - Removed @azure/msal-react completely.
+  - Implemented MSAL redirect + token acquisition using only @azure/msal-browser.
+- Result:
+  - npm install/build no longer blocked by msal-react peer dependency conflicts.
+
+2) MSAL redirect bootstrapping in a React 19 + CRA app
+- Added/updated:
+  - src/auth/msalConfig.js: MSAL configuration reading existing REACT_APP_* Entra variables.
+  - src/auth/msalInstance.js: singleton MSAL instance and active-account helper.
+  - src/index.js: runs msalInstance.initialize() and handleRedirectPromise() BEFORE rendering App in real mode.
+- Intent:
+  - Ensure redirect response is processed and active account set before API calls.
+
+3) Real API client uses Bearer tokens (MSAL)
+- Added/updated:
+  - src/api/real/apiClient.js: apiFetch() attaches Authorization: Bearer <token> using acquireTokenSilent().
+  - src/api/real/realAuthApi.js: loginRedirect/logoutRedirect + GET /api/auth/me + users GET/PATCH wiring.
+
+4) Azure Static Web Apps routing fix (SPA deep links)
+- Issue:
+  - Refreshing /login or opening /login directly produced “page not found” (SWA tried to resolve a physical file).
+- Fix:
+  - Added frontend/public/staticwebapp.config.json to rewrite unknown routes to /index.html.
+- Result:
+  - /login, /cases, /search etc. should load on refresh without 404 (client-side routing works).
+
+5) Hardcoded mock toggle (no URL/localStorage override)
+- Requirement:
+  - Mocking must be hardcoded; cannot be switched via URL query or localStorage.
+- Fix:
+  - src/api/config.js changed so USE_MOCK is a constant controlled only in code.
+  - Default: real mode (production).
+- Result:
+  - Mock/real mode cannot be toggled by end users via URL or storage.
+
+6) “interaction_in_progress” and stuck sign-in cleanup + re-clickable login
+- Observed errors:
+  - “interaction_in_progress” after clicking Microsoft sign-in and/or returning from redirect.
+- Fix approach implemented:
+  - realAuthApi.login() includes cleanup logic to remove stale MSAL “interaction” keys and retry once.
+  - Login button disables while sign-in is starting to prevent double-interaction triggers.
+- Result:
+  - Users can re-click sign-in without waiting for a stuck interaction state to expire.
+
+7) UI modernization for login/auth pages (soft webapp style)
+- Issue:
+  - After refactors, login/auth pages looked unstyled compared to earlier “modern/soft” UI.
+- Fix:
+  - Updated src/styles/main.css to add modern auth page styling (centered card, soft background, better spacing).
+  - Updated LoginPage to use these classes and show clearer state/error messages.
+
+8) Build-time secrets injection for SWA (no committed .env)
+- Problem:
+  - CRA needs REACT_APP_* variables at build-time; .env is not committed.
+  - Missing REACT_APP_ENTRA_AUTHORITY caused runtime error: “Cannot read properties of undefined (reading 'endsWith')”.
+- Fix:
+  - Updated SWA GitHub Actions workflow to inject required REACT_APP_* values from GitHub Secrets into the build step env.
+- Required GitHub Secrets (frontend build-time):
+  - REACT_APP_API_BASE_URL
+  - REACT_APP_ENTRA_TENANT_ID
+  - REACT_APP_ENTRA_CLIENT_ID
+  - REACT_APP_ENTRA_AUTHORITY
+  - REACT_APP_ENTRA_API_SCOPE
+
+RBAC + pages status (frontend)
+- RBAC guard scaffolding added earlier in Part 4 work (ProtectedRoute/Layout/AuthContext).
+- Navigation + page visibility are driven by roles from /api/auth/me (or mock equivalents).
+- Closed system enforced: NO registration routes/components/buttons.
+- Analytics UI/API usage removed (deleted analytics pages/services/mocks; cleaned CSS).
+
+Current blocking issue (real mode auth + /api/auth/me)
+Symptoms
+- After successful Entra sign-in and return to SWA site, the app remains on /login and shows:
+  “Failed to fetch … app could not load /api/auth/me … Try sign-in again / Sign out”
+- This occurs even for a tenant member account like:
+  detective@mehranfarnimagmail.onmicrosoft.com
+
+What it means (frontend-side)
+- MSAL account caching is happening (browser storage has account entries).
+- The frontend still cannot complete the “logged-in” state because /api/auth/me fails.
+- In the current frontend, the user is considered “logged in” only when /api/auth/me returns success.
+- The failure can come from:
+  - token acquisition failing (silent token cannot be minted for the configured scope/authority),
+  - or /api/auth/me rejecting the token (401/403),
+  - or network/CORS/APIM issues causing a fetch failure.
+- Frontend now surfaces this state on the login page with actions (try again, sign out).
+
+What has been done to make this diagnosable (frontend)
+- apiClient has explicit detection for interaction-required cases (and avoids infinite loops).
+- AuthContext now sets an authError and keeps the app on /login when /api/auth/me fails.
+- LoginPage shows a specific “Microsoft sign-in detected but /api/auth/me failed” message.
+- LoginPage provides “Try sign-in again” and “Sign out” actions to avoid getting stuck.
+
+Files changed in this chat (frontend-only summary)
+- frontend/package.json
+- frontend/src/index.js
+- frontend/src/auth/msalConfig.js
+- frontend/src/auth/msalInstance.js
+- frontend/src/api/config.js
+- frontend/src/api/real/apiClient.js
+- frontend/src/api/real/realAuthApi.js
+- frontend/src/context/AuthContext.jsx
+- frontend/src/pages/LoginPage.jsx
+- frontend/src/styles/main.css
+- frontend/public/staticwebapp.config.json
+- .github/workflows/azure-static-web-apps-*.yml (SWA workflow updated to inject build-time env from GitHub secrets)
+- frontend/README.md (updated during Part 4)
+- docs/FRONTEND_GUIDE.md (updated/added during Part 4)
+- docs/DEMO_CHECKLIST.md (added during Part 4)
+
+Next actions needed (frontend-side debugging goals)
+- Instrument /api/auth/me failure path to show:
+  - the HTTP status (401 vs 403 vs network),
+  - and the MSAL token acquisition error name (interaction_required vs other).
+- Confirm the token request uses the exact scope required by the API (REACT_APP_ENTRA_API_SCOPE) and correct authority/tenant.
+- Confirm the SWA build is actually receiving REACT_APP_* secrets (verify in deployed JS bundle or build logs).
+- Confirm API base URL is reachable from SWA origin (CORS/APIM settings are backend-side, not covered here).
+
+END OF REPORT

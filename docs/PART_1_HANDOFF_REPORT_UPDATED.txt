@@ -1,0 +1,144 @@
+PART 1 HANDOFF REPORT — Digital Evidence Management System (current state)
+
+Date: 2026-02-14 (Europe/Rome)
+
+A) Azure resources created (as implemented)
+Resource Group:
+- Digital-Evidence-Management-System
+
+Storage:
+- Storage account: stdems1
+- Blob containers: evidence-raw, evidence-derived
+- Not created: evidence-thumbs
+
+Cosmos DB:
+- Account name: cos-dems1
+- Database/containers: verify in Cosmos Data Explorer
+  - Intended DB: dems
+  - Intended containers: users, departments, cases, evidence
+  - Intended partition keys: /id, /id, /department, /caseId
+
+Azure AI Search:
+- Service: srch-dems1
+
+Azure AI Vision:
+- Resource: vis-dems
+- Key Vault secret:
+  - Key Vault: kv-dems1
+  - Secret name: vis-key1  (stores Vision Key 1)
+
+Key Vault:
+- kv-dems1
+- Managed Identity access: ENABLED and working (Key Vault references resolve)
+
+Azure Functions:
+- Function App: func-dems1
+- Hosting: Consumption
+- Status: HTTP trigger deployed and reachable (Hello World)
+
+API Management:
+- apim-dems1
+- Status: API imported from Function App and published
+- Current API base path (per frontend env): https://apim-dems1.azure-api.net/func-dems1
+
+Static Web App:
+- swa-dems
+
+Analytics:
+- Skipped (no Data Factory/Synapse)
+
+B) Architecture decisions (must be preserved in Part 2)
+Identity/Auth (Workforce Entra ID):
+- Auth service: Microsoft Entra ID (Workforce) in Default Directory / standard tenant
+- Frontend auth flow: MSAL.js Redirect Flow using Microsoft-hosted login UI
+- No public self-service signup (default Entra tenant behavior); users created/invited by admins
+
+Backend + data pipeline:
+- Evidence ingestion pipeline: Blob-trigger Azure Functions (NO Event Grid)
+- API front door: Azure API Management (APIM) in front of Azure Functions
+- Storage: Blob Storage for evidence (stdems1)
+- Metadata: Cosmos DB (cos-dems1)
+- Search: Azure AI Search (srch-dems1)
+- Secrets: Azure Key Vault (kv-dems1) + Function App Managed Identity + Key Vault references in Function App configuration
+
+C) Entra app registrations (completed up to Step 4.8; Graph provisioning not implemented yet)
+Completed:
+- SPA app registration: dems-frontend
+- API app registration: dems-api
+- API scope exposed: access_as_user
+- dems-frontend granted delegated permission to dems-api scope + admin consent
+- App Roles defined in dems-api with EXACT values:
+  - admin, detective, case_officer, prosecutor
+- (Role assignment): If roles were assigned to users/groups, tokens should carry the roles claim; verify during Part 2 testing.
+
+NOT completed (explicitly deferred to Part 2):
+- 4.8 Backend Graph user provisioning implementation (POST /users) + optional role assignment automation.
+  - Requires an Entra app configured for Graph permissions + secret/cert stored in Key Vault.
+
+D) Environment variables state (confirmed)
+Frontend env (local dev):
+- REACT_APP_API_BASE_URL=https://apim-dems1.azure-api.net/func-dems1
+- REACT_APP_ENTRA_TENANT_ID=2b14e728-abf9-4076-8465-8c1520df0e48
+- REACT_APP_ENTRA_CLIENT_ID=f5697764-8b86-4cb8-beda-3f986ee268f5
+- REACT_APP_ENTRA_AUTHORITY=https://login.microsoftonline.com/2b14e728-abf9-4076-8465-8c1520df0e48
+- REACT_APP_ENTRA_API_SCOPE=api://5c696d12-ced1-409f-bde9-5806053165b3/access_as_user
+
+Backend env (Azure):
+- All planned Function App application settings were added.
+- Key Vault references now resolve (Managed Identity enabled + Key Vault access configured).
+
+Notes for Part 2:
+- Keep the APIM base URL stable; backend should serve routes under that base path.
+- Token validation must use Entra tenant issuer + audience aligned to dems-api “Application ID URI” / scope.
+
+E) IDs/URLs to copy (labels + where)
+Azure Portal:
+- Subscription ID: Subscriptions -> (select subscription) -> “Subscription ID”
+- Function App default domain: Function App (func-dems1) -> Overview -> “Default domain”
+- APIM Gateway URL: API Management (apim-dems1) -> Overview -> “Gateway URL”
+- APIM API base path: API Management (apim-dems1) -> APIs -> (imported API) -> “API URL suffix”
+- Static Web App URL: Static Web App (swa-dems) -> Overview -> “URL”
+- Cosmos endpoint: Cosmos DB (cos-dems1) -> Overview -> “URI”
+- Search endpoint: Search service (srch-dems1) -> Overview -> “Url/Endpoint”
+- Vision endpoint: Vision (vis-dems) -> “Keys and Endpoint” -> “Endpoint”
+- Key Vault URI: Key Vault (kv-dems1) -> Overview -> “Vault URI”
+Entra:
+- Tenant ID: Microsoft Entra admin center -> Overview -> “Tenant ID”
+- SPA Client ID: App registrations -> dems-frontend -> Overview -> “Application (client) ID”
+- API Client ID: App registrations -> dems-api -> Overview -> “Application (client) ID”
+- Application ID URI: App registrations -> dems-api -> Expose an API -> “Application ID URI”
+
+F) What is DONE vs PENDING (for Part 2)
+DONE:
+- Core Azure resources provisioned (RG, Storage, Cosmos account, Search service, Vision, Key Vault, Function App, APIM, Static Web App)
+- Workforce Entra setup completed through roles + scope configuration
+- Frontend and backend env keys populated
+- Function App Managed Identity enabled; Key Vault references working
+- APIM imported Function App and has a published API base path
+- HTTP trigger deployed (Hello World)
+
+PENDING (must be executed in Part 2):
+1) Implement real backend API in Azure Functions (Node.js + TypeScript) to match repo API contract:
+   - /api/auth/me, /api/users, /api/cases, /api/evidence, /api/departments, /api/analytics
+2) Implement evidence upload via SAS:
+   - backend issues short-lived SAS
+   - frontend uploads to Blob
+   - backend registers metadata in Cosmos
+3) Implement blob-trigger processing for evidence-raw:
+   - OCR using Vision
+   - normalize metadata + upsert Cosmos
+   - push searchable fields to Azure AI Search index
+   - store derived outputs in evidence-derived
+   - idempotency + retries + logging
+4) Implement status store (choose Azure-native simplest: Cosmos item status field OR Table Storage if needed; justify)
+5) Add APIM inbound security policies:
+   - validate JWT (issuer, audience)
+   - enforce roles (admin/detective/case_officer/prosecutor)
+   - CORS settings consistent with swa-dems + localhost
+6) Implement Graph provisioning backend (Admin-only):
+   - POST /users creates Member users (Graph)
+   - optional role assignment automation
+7) Add tests + local dev workflow (Azurite, local.settings.json, commands)
+
+
+my func-dems1 | Environment variables already set in azure portal.

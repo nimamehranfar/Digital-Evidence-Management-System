@@ -174,7 +174,7 @@ export default function DepartmentsPage() {
                     className="form-input"
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g. Homicide"
+                    placeholder="e.g. NYPD"
                   />
                 </div>
                 <div className="form-group">

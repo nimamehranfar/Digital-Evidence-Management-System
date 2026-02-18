@@ -2,10 +2,11 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Briefcase, Upload, Search,
-  Users, User, LogOut, Menu, X, Shield, Building2,
+  Users, User, LogOut, Menu, X, Shield, UserSearch, Building2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { USE_MOCK } from "../api/config";
+import DEMS from "../static/DEMS_icon.png"
 
 export default function Layout() {
   const { user, logout, isAdmin, isDetective, isCaseOfficer, isProsecutor, isInvestigative } = useAuth();
@@ -61,8 +62,9 @@ export default function Layout() {
               {mobileOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
             <div className="logo">
-              <Shield size={26} />
-              <span className="logo-text">DEMS</span>
+              {/*<UserSearch size={26} />*/}
+              <img src={DEMS} alt="DEMS"/>
+              <span className="logo-text">Digital Evidence Management System</span>
             </div>
           </div>
 

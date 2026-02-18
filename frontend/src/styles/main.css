@@ -176,7 +176,7 @@ input, select, textarea { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: .625rem;
-  color: var(--color-primary);
+  color: #902b97;
   font-weight: 700;
   font-size: 1.125rem;
   letter-spacing: -.02em;
@@ -389,7 +389,7 @@ input, select, textarea { font-family: inherit; }
   box-shadow: var(--shadow-xl);
   padding: 2.5rem 2.25rem;
   width: 100%;
-  max-width: 420px;
+  max-width: 500px;
 }
 
 .login-header {
@@ -403,11 +403,19 @@ input, select, textarea { font-family: inherit; }
   justify-content: center;
   width: 68px;
   height: 68px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-  border-radius: var(--r-xl);
-  color: #fff;
+  /*background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);*/
+  /*border-radius: var(--r-xl);*/
+  /*color: #fff;*/
   margin-bottom: 1rem;
-  box-shadow: 0 8px 24px rgba(37,99,235,.35);
+  /*box-shadow: 0 8px 24px rgba(37,99,235,.35);*/
+}
+
+.login-logo img {
+  width: 6rem;
+}
+
+.logo img{
+  width: 3rem;
 }
 
 .login-header h1 {
@@ -855,6 +863,10 @@ tbody tr:hover { background: var(--color-gray-50); }
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+
+.form-input:disabled, .form-select:disabled, .form-textarea:disabled{
+  border: none;
 }
 
 .form-textarea {

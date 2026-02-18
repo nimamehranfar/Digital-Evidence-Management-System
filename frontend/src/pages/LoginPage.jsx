@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { USE_MOCK } from "../api/config";
 import { Shield, AlertCircle, RefreshCw, LogOut, Loader } from "lucide-react";
+import DEMS from "../static/DEMS_icon.png"
 
 export default function LoginPage() {
   const { user, loading, authError, login, logout, retryAuth, isAdmin } = useAuth();
@@ -83,7 +84,9 @@ export default function LoginPage() {
       <div className="login-page">
         <div className="login-container">
           <div className="login-header">
-            <div className="login-logo"><Shield size={48} /></div>
+            <div className="login-logo">
+              <img src={DEMS} alt="DEMS"/>
+            </div>
             <h1>Digital Evidence System</h1>
           </div>
           <div style={{ textAlign: "center", padding: "2rem" }}>
@@ -103,11 +106,11 @@ export default function LoginPage() {
         {/* Header */}
         <div className="login-header">
           <div className="login-logo">
-            <Shield size={48} />
+            <img src={DEMS} alt="DEMS"/>
           </div>
-          <h1>Digital Evidence System</h1>
+          <h1>Digital Evidence Management System</h1>
           <p className="login-subtitle">
-            {USE_MOCK ? "Demo mode — select a role to continue" : "Secure access — authorised personnel only"}
+            {USE_MOCK ? "Demo mode — select a role to continue" : "authorised personnel only"}
           </p>
         </div>
 
@@ -212,7 +215,7 @@ export default function LoginPage() {
         <p className="login-closed-note">
           {USE_MOCK
             ? "Mock mode: no real authentication is performed."
-            : "This is a closed system. New accounts are created by administrators in the Entra ID portal."}
+            : "Ask administrators for account information."}
         </p>
       </div>
     </div>

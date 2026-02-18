@@ -1,11 +1,13 @@
 /**
  * CasesPage.jsx
  *
- * CHANGED (Problem 3):
- *   - Added useEffect that calls reload() (reloadCases from context) on mount.
- *     Previously the page relied entirely on the initial CaseContext snapshot
- *     from login time.  Now it always fetches a fresh list when navigated to.
- *   - The department fetch for the filter dropdown was already correct; kept as-is.
+ * CHANGED:
+ *   - Added `deptMap` (useMemo) that builds a { [id]: name } lookup from the
+ *     `departments` state.  The departments list was already being fetched on
+ *     mount for the filter dropdown, so no extra API call is needed.
+ *   - Table cell for Department now renders `deptMap[c.department]` (the human-
+ *     readable name) with the raw ID as a fallback if the department is somehow
+ *     not in the loaded list.
  */
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -48,20 +50,29 @@ export default function CasesPage() {
   const [pageError,    setPageError]    = useState("");
 
   // ── Fetch fresh cases when this page mounts ─────────────────────────────────
-  // This ensures the list is up to date after navigation from another page,
-  // even if CaseContext's initial load ran a while ago.
   useEffect(() => {
     reloadCases();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Department list for the filter dropdown
+  // Department list for the filter dropdown AND for name resolution in the table.
   useEffect(() => {
     departmentApi
       .getDepartments()
       .then((d) => setDepartments(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
+
+  // ── Department ID → name lookup ─────────────────────────────────────────────
+  // Built from the same `departments` array that powers the filter dropdown.
+  // No extra API call required.
+  const deptMap = useMemo(() => {
+    const map = {};
+    for (const d of departments) {
+      if (d.id) map[d.id] = d.name || d.id;
+    }
+    return map;
+  }, [departments]);
 
   const filtered = useMemo(() => {
     return cases.filter((c) => {
@@ -200,7 +211,7 @@ export default function CasesPage() {
                 className="form-input"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Case title"
+                placeholder="e.g. Valentine st Homicide"
                 required
               />
             </div>
@@ -232,16 +243,16 @@ export default function CasesPage() {
                 </select>
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Description</label>
-              <textarea
-                className="form-textarea"
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Optional description"
-                style={{ minHeight: 70 }}
-              />
-            </div>
+            {/*<div className="form-group">*/}
+            {/*  <label className="form-label">Description</label>*/}
+            {/*  <textarea*/}
+            {/*    className="form-textarea"*/}
+            {/*    value={form.description}*/}
+            {/*    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}*/}
+            {/*    placeholder="Optional description"*/}
+            {/*    style={{ minHeight: 70 }}*/}
+            {/*  />*/}
+            {/*</div>*/}
             <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
               <button
                 type="button"
@@ -293,8 +304,17 @@ export default function CasesPage() {
                     {c.title || c.id}
                   </Link>
                 </td>
+                {/*
+                  FIX: previously rendered `c.department` directly, which is the
+                  raw department ID stored on the case document (e.g. "dept-001").
+                  Now we look up the human-readable name from `deptMap`, which is
+                  built from the same `departments` array already fetched for the
+                  filter dropdown.  If for any reason the ID isn't in the map
+                  (e.g. the department was deleted), we fall back to showing the
+                  raw ID rather than showing nothing.
+                */}
                 <td style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
-                  {c.department || "—"}
+                  {deptMap[c.department] || c.department || "—"}
                 </td>
                 <td>
                   <span className={`badge ${STATUS_BADGE[normalizeCaseStatus(c.status)] || "badge-gray"}`}>

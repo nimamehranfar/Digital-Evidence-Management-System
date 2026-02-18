@@ -527,7 +527,7 @@ export default function CaseDetailPage() {
         <div>
           <h1 style={{ wordBreak: "break-word" }}>{caseItem.title || "Untitled Case"}</h1>
           <p style={{ color: "var(--color-text-secondary)", fontSize: ".875rem" }}>
-            Department: {caseItem.department || "—"} ·{" "}
+            {/*Department: {caseItem.department || "—"} ·{" "}*/}
             Created: {caseItem.createdAt ? format(new Date(caseItem.createdAt), "PP") : "—"}
           </p>
         </div>
@@ -578,11 +578,11 @@ export default function CaseDetailPage() {
                 {saving ? "Saving…" : "Save Changes"}
               </button>
             )}
-            {isProsecutor && (
-              <p className="muted" style={{ marginTop: ".75rem", fontSize: ".8125rem" }}>
-                Read-only role — edits disabled.
-              </p>
-            )}
+            {/*{isProsecutor && (*/}
+            {/*  <p className="muted" style={{ marginTop: ".75rem", fontSize: ".8125rem" }}>*/}
+            {/*    Read-only role — edits disabled.*/}
+            {/*  </p>*/}
+            {/*)}*/}
           </div>
         </div>
 

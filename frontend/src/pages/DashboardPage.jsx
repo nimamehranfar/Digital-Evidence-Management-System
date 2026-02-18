@@ -206,12 +206,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isProsecutor && (
-        <div className="alert alert-info" style={{ marginTop: "var(--sp-lg)" }}>
-          <AlertCircle size={18} />
-          <span>Prosecutor — read-only view. Upload, create, and delete actions are disabled.</span>
-        </div>
-      )}
+      {/*{isProsecutor && (*/}
+      {/*  <div className="alert alert-info" style={{ marginTop: "var(--sp-lg)" }}>*/}
+      {/*    <AlertCircle size={18} />*/}
+      {/*    <span>Prosecutor — read-only view. Upload, create, and delete actions are disabled.</span>*/}
+      {/*  </div>*/}
+      {/*)}*/}
     </div>
   );
 }

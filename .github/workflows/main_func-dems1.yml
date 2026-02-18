@@ -40,7 +40,7 @@ jobs:
           npm config delete https-proxy || true
 
           # Reproducible install based on package-lock.json
-          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund --registry "https://registry.npmjs.org/"
 
           npm run build --if-present
           npm run test --if-present

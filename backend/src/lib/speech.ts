@@ -52,7 +52,11 @@ export async function transcribeAudio(
 
   // Push the entire file buffer into a stream the SDK can consume.
   const pushStream = sdk.AudioInputStream.createPushStream();
-  pushStream.write(buffer);
+  // Speech SDK expects an ArrayBuffer; Node Buffers may be backed by SharedArrayBuffer.
+// Create a fresh Uint8Array copy so the backing store is a plain ArrayBuffer.
+  const bytes = new Uint8Array(buffer);
+  pushStream.write(bytes.buffer);
+
   pushStream.close();
 
   const audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
@@ -62,7 +66,7 @@ export async function transcribeAudio(
     const parts: string[] = [];
 
     // Fires for each fully recognized utterance (sentence/pause boundary).
-    recognizer.recognized = (_sender, event) => {
+    recognizer.recognized = (_sender: sdk.Recognizer, event: sdk.SpeechRecognitionEventArgs) => {
       if (event.result.reason === sdk.ResultReason.RecognizedSpeech) {
         const text = event.result.text.trim();
         if (text) parts.push(text);
@@ -70,15 +74,15 @@ export async function transcribeAudio(
     };
 
     // Fires when the audio stream ends and recognition completes.
-    recognizer.sessionStopped = () => {
+    recognizer.sessionStopped = (_sender: sdk.Recognizer, _event: sdk.SessionEventArgs) => {
       recognizer.stopContinuousRecognitionAsync(
         () => resolve({ text: parts.join(" "), segments: parts.length }),
-        (err) => reject(new Error(`Speech stop failed: ${err}`))
+        (err: string) => reject(new Error(`Speech stop failed: ${err}`))
       );
     };
 
     // Fires on cancellation (including errors and end-of-stream).
-    recognizer.canceled = (_sender, event) => {
+    recognizer.canceled = (_sender: sdk.Recognizer, event: sdk.SpeechRecognitionCanceledEventArgs) => {
       if (event.reason === sdk.CancellationReason.Error) {
         recognizer.stopContinuousRecognitionAsync(
           () =>
@@ -98,7 +102,7 @@ export async function transcribeAudio(
         // CancellationReason.EndOfStream — normal completion for file input.
         recognizer.stopContinuousRecognitionAsync(
           () => resolve({ text: parts.join(" "), segments: parts.length }),
-          (err) => reject(new Error(`Speech stop failed: ${err}`))
+          (err: string) => reject(new Error(`Speech stop failed: ${err}`))
         );
       }
     };
@@ -107,7 +111,7 @@ export async function transcribeAudio(
       () => {
         /* recognition started, wait for events */
       },
-      (err) => reject(new Error(`Speech start failed: ${err}`))
+      (err: string) => reject(new Error(`Speech start failed: ${err}`))
     );
   });
 }

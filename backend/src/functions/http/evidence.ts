@@ -25,6 +25,10 @@ import { getSearchClients } from "../../lib/search";
 import { cascadeDeleteEvidence } from "../../lib/cascadeDelete";
 import type { Case } from "../../models/types";
 
+// SAS lifetimes are intentionally short. This value is only used for the
+// pre-signed upload/download URLs returned to the frontend.
+const SAS_EXPIRES_MINUTES = 15;
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function sanitizeFileName(name: string): string {
@@ -87,10 +91,11 @@ export async function uploadInit(
     const safeFileName = sanitizeFileName(body.fileName);
     const blobPath = `${body.caseId}/${evidenceId}/${safeFileName}`;
 
-    const { uploadUrl, expiresOn } = await createUploadSas(
+    const { sasUrl: uploadUrl, expiresOn } = await createUploadSas(
       env.AZURE_STORAGE_ACCOUNT_NAME,
       env.EVIDENCE_CONTAINER_RAW,
-      blobPath
+      blobPath,
+      SAS_EXPIRES_MINUTES
     );
 
     return json(200, {
@@ -310,10 +315,11 @@ export async function evidenceReadUrl(
     if (found.department) await assertDepartmentAccess(auth, found.department);
 
     const env = getEnv();
-    const { readUrl, expiresOn } = await createReadSas(
+    const { sasUrl: readUrl, expiresOn } = await createReadSas(
       env.AZURE_STORAGE_ACCOUNT_NAME,
       env.EVIDENCE_CONTAINER_RAW,
-      found.blobPathRaw
+      found.blobPathRaw,
+      SAS_EXPIRES_MINUTES
     );
 
     return json(200, { readUrl, expiresOn });

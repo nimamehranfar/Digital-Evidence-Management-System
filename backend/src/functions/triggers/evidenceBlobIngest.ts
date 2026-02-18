@@ -193,8 +193,9 @@ export async function evidenceBlobIngest(blob: Buffer, context: InvocationContex
         );
       } else {
         const result = await mammoth.extractRawText({ buffer: blob });
-        extractedText = result.value ?? "";
-        logJson(context, "evidence_docx_extracted", { evidenceId, chars: extractedText.length });
+        const text = result.value ?? "";
+        extractedText = text;
+        logJson(context, "evidence_docx_extracted", { evidenceId, chars: text.length });
       }
     }
 
